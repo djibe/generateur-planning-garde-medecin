@@ -1,0 +1,195 @@
+# Générateur de planning de garde — RecoMédicales
+
+Application web statique (SvelteKit 2 + Svelte 5) qui génère le planning annuel de garde
+d'un secteur de médecine générale, avec objectifs par médecin, jours fériés français,
+gestion des absences, échanges manuels et export Excel.
+
+Toutes les données restent dans le navigateur (`localStorage`) : aucun serveur, aucun compte,
+aucune donnée envoyée sur Internet.
+
+---
+
+## Fonctionnalités
+
+### 1. Médecins & objectifs
+
+- Nom du profil et du secteur, année.
+- Liste des médecins : nom, téléphone, ordre, exemption, absences.
+- Import CSV (`Nom;Téléphone;Exempté`), ajout/suppression, réordonnancement.
+- Objectifs **par semestre** et par catégorie : semaine, vendredi, samedi, dimanche,
+  veille de férié, jour férié.
+- Boutons « Répartition équitable » (calcule des objectifs au prorata des créneaux) et
+  « Ajuster aux créneaux » (corrige les objectifs existants).
+- Alerte sur les écarts entre la somme des objectifs et le nombre de créneaux disponibles.
+  Les objectifs sont **indicatifs** : le générateur s'en approche au mieux.
+
+### 2. Synthèse & équité
+
+- Totaux par semestre et sur l'année : jours, gardes, week-ends, weekdays, vendredis,
+  samedis, dimanches, veilles de férié et jours fériés.
+- Écart maximal à la cible, espacement minimum et moyen entre deux gardes.
+- Barre d'équilibre visuelle par médecin.
+
+### 3. Calendrier
+
+- Vue calendrier annuelle (12 mois) ou vue liste.
+- Le nom du médecin est affiché dans chaque case ; clic sur une garde pour l'échanger.
+- Changement de médecin directement depuis la liste, avec échange automatique de la garde
+  la plus proche du même semestre (pour préserver l'équité).
+- Verrouillage d'une garde : elle est conservée lors de la prochaine génération.
+
+### 4. Par médecin
+
+- Sélection du médecin, statistiques détaillées par semestre.
+- Calendrier filtré (les gardes des autres médecins apparaissent en fondu).
+- Liste de ses gardes, avec verrouillage.
+
+### Transverse
+
+- Export Excel de **chaque vue** (médecins/objectifs, synthèse, planning, par médecin).
+- Thème clair/sombre, mise en page imprimable.
+- Profils multiples, duplication vers l'année suivante, sauvegarde/restauration JSON.
+- Enregistrement automatique à chaque modification (debounce de 250 ms).
+- Interface entièrement en français, code et identifiants en anglais.
+
+---
+
+## Règles de génération
+
+| Règle                             | Détail                                                                                                     |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Semestres                         | 01/01 → 30/06 (S1) et 01/07 → 31/12 (S2)                                                                   |
+| Jours fériés                      | 11 fériés métropolitains, calculés (Pâques via Meeus/Jones/Butcher)                                        |
+| Week-ends                         | Mode global par profil : **1 garde** (samedi + dimanche) ou **2 gardes** séparées                          |
+| Attribution                       | 1 praticien par garde ; tous les jours de l'année sont couverts                                            |
+| Objectifs                         | Souples, par semestre et par catégorie ; le solveur minimise l'écart                                       |
+| Espacement                        | Soft : pénalise les gardes à moins de 14 jours, évite deux week-ends consécutifs                           |
+| Exemptions                        | Exemption totale (exclu de la génération) ou sur une période ; absences ponctuelles                        |
+| Veille de férié                   | Un jour qui précède un férié est compté dans la catégorie « veille de férié »                              |
+| Férié un vendredi/samedi/dimanche | Compté dans « férié » **et** dans la colonne du jour (d'où des totaux pouvant dépasser le nombre de jours) |
+| Verrouillage                      | Une garde verrouillée est réattribuée au même médecin lors de la régénération                              |
+
+Le générateur combine un remplissage glouton (priorité aux week-ends et fériés) puis une
+recherche locale recuite (recuit simulé) déterministe pour une graine donnée. Une génération
+annuelle prend environ 0,2 s pour une douzaine de médecins.
+
+---
+
+## Démarrage
+
+Prérequis : **Node.js 22** (voir `.nvmrc`).
+
+```bash
+npm install
+npm run dev        # http://localhost:5173
+```
+
+### Scripts
+
+| Commande             | Rôle                                  |
+| -------------------- | ------------------------------------- |
+| `npm run dev`        | Serveur de développement              |
+| `npm run build`      | Build statique dans `build/`          |
+| `npm run preview`    | Prévisualisation du build             |
+| `npm run check`      | Vérification TypeScript/Svelte        |
+| `npm test`           | Tests unitaires Vitest (domaine + IO) |
+| `npm run test:watch` | Tests en mode watch                   |
+| `npm run format`     | Formatage Prettier                    |
+
+---
+
+## Format CSV
+
+Une ligne par médecin, séparateur `;` (ou `,` / tabulation, détection automatique).
+L'en-tête est optionnel. Les colonnes `Téléphone` et `Exempté` sont optionnelles.
+
+```csv
+Nom;Téléphone;Exempté
+Dr Alice Martin;06 12 34 56 78;non
+Dr Benoît Petit;06 98 76 54 32;oui
+```
+
+Les valeurs reconnues pour l'exemption sont `oui`/`non`, `true`/`false`, `1`/`0`.
+Les guillemets sont gérés (`"Dr; A"`). Un BOM UTF-8 est ignoré.
+
+---
+
+## Stockage local
+
+| Clé                    | Contenu                                                     |
+| ---------------------- | ----------------------------------------------------------- |
+| `gpgm:v1:index`        | Liste des profils + profil actif                            |
+| `gpgm:v1:ui`           | Onglet, thème, médecin sélectionné                          |
+| `gpgm:v1:profile:<id>` | Profil complet (médecins, objectifs, affectations, verrous) |
+| `gpgm:v1:corrupt:<id>` | Copie de secours d'un profil illisible (quarantaine)        |
+
+Le bouton **Données → Exporter tous les profils (.json)** produit une sauvegarde complète,
+restaurable sur un autre navigateur. Vider le stockage du navigateur supprime les profils.
+
+---
+
+## Déploiement Netlify
+
+Le fichier `netlify.toml` est prêt :
+
+- commande de build : `npm run build`
+- dossier publié : `build`
+- Node.js 22
+- redirection SPA vers `index.html`
+- en-têtes de sécurité de base
+
+Il suffit de connecter le dépôt à Netlify, ou de lancer :
+
+```bash
+npx netlify deploy --prod
+```
+
+---
+
+## Architecture
+
+```
+src/
+├─ app.scss                 # Bootstrap + thème (variables, dark mode, impression)
+├─ lib/
+│  ├─ components/           # UI réutilisable (modales, calendrier, en-tête, toasts)
+│  ├─ domain/               # Cœur métier sans dépendance UI
+│  │  ├─ calendar.ts        # Créneaux (jours, week-ends, semestres)
+│  │  ├─ holidays.ts        # Fériés français (Pâques, veilles)
+│  │  ├─ generator.ts       # Greedy + recuit simulé (déterministe)
+│  │  ├─ quotas.ts          # Objectifs, capacités, équité
+│  │  ├─ stats.ts           # Statistiques et espacement
+│  │  └─ types.ts
+│  ├─ io/                   # CSV, JSON, Excel, localStorage, schémas Zod
+│  ├─ stores/app.svelte.ts  # Store Svelte 5 (runes), persistance, actions
+│  ├─ styles/_components.scss
+│  ├─ utils/                # Dates, téléchargements
+│  └─ views/                # Les 4 vues
+├─ routes/                  # +layout / +page (SPA prerendue)
+└─ app.html
+tests/                      # Vitest : fériés, calendrier, quotas, CSV, générateur
+```
+
+---
+
+## Tests
+
+```bash
+npm test
+```
+
+La suite couvre le calcul de Pâques et des fériés, la construction des créneaux (modes
+groupé/séparé, veilles, fériés en week-end), les quotas, le CSV et le générateur
+(remplissage complet, déterminisme, exemptions, absences, verrous, espacement).
+
+---
+
+## Limites connues
+
+- Les objectifs sont **souples** : le planning n'est pas garanti parfaitement équitable,
+  notamment en cas d'absences nombreuses ou de très peu de médecins disponibles.
+- Un jour férié tombant un vendredi, un samedi ou un dimanche est compté deux fois dans
+  les totaux (une fois dans sa catégorie de week-end, une fois dans « férié »).
+- L'export Excel charge ExcelJS à la demande (chunk d'environ 1 Mo) : le premier export
+  peut prendre une seconde.
+- Les données étant locales, elles ne sont pas synchronisées entre appareils.

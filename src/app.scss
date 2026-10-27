@@ -1,0 +1,28 @@
+@use 'bootstrap/scss/bootstrap' with (
+	$primary: #4150f5,
+	$secondary: #6b7089,
+	$success: #12805c,
+	$info: #0e7490,
+	$warning: #e8a33d,
+	$danger: #d92d4b,
+	$light: #f4f6fb,
+	$dark: #1d2138,
+	$body-color: #1d2138,
+	$font-family-sans-serif: (
+		'Roboto',
+		-apple-system,
+		BlinkMacSystemFont,
+		'Segoe UI',
+		sans-serif
+	),
+	$font-size-base: 0.9375rem,
+	$border-color: #e4e7f1,
+	$border-radius: 0.75rem,
+	$border-radius-sm: 0.5rem,
+	$border-radius-lg: 1rem,
+	$link-decoration: none,
+	$enable-negative-margins: true,
+	$focus-ring-width: 0.2rem
+);
+
+@use './lib/styles/components';
