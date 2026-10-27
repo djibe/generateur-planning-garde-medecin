@@ -10,5 +10,14 @@ export default defineConfig({
 	},
 	build: {
 		chunkSizeWarningLimit: 1600
+	},
+	css: {
+    preprocessorOptions: {
+      scss: {
+        // Bootstrap's own SCSS emits Dart Sass deprecation warnings on
+        // newer Sass versions — silence noise from third-party deps only.
+        quietDeps: true
+      }
+    }
 	}
 });
