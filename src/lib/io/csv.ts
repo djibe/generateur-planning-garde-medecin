@@ -1,4 +1,4 @@
-import type { Physician } from '$lib/domain/types';
+import type { Physician } from '#lib/domain/types.js';
 
 export interface CsvPhysician {
 	name: string;

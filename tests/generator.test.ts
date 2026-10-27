@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildSlots } from '$lib/domain/calendar';
-import { createPhysician } from '$lib/domain/factory';
-import { generateSchedule, isAvailable } from '$lib/domain/generator';
-import { CATEGORIES, averageTargets, capacityByCategory } from '$lib/domain/quotas';
-import { computeAllStats } from '$lib/domain/stats';
-import type { Profile, WeekendMode } from '$lib/domain/types';
+import { buildSlots } from '#lib/domain/calendar.js';
+import { createPhysician } from '#lib/domain/factory.js';
+import { generateSchedule, isAvailable } from '#lib/domain/generator.js';
+import { CATEGORIES, averageTargets, capacityByCategory } from '#lib/domain/quotas.js';
+import { computeAllStats } from '#lib/domain/stats.js';
+import type { Profile, WeekendMode } from '#lib/domain/types.js';
 
 function makeProfile(count = 12, mode: WeekendMode = 'combined'): Profile {
 	const slots = buildSlots(2026, mode);

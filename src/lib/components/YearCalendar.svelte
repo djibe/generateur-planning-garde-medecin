@@ -6,8 +6,8 @@
 		monthEnd,
 		monthStart,
 		weekdayIndex
-	} from '$lib/utils/date';
-	import type { Slot } from '$lib/domain/types';
+	} from '#lib/utils/date.js';
+	import type { Slot } from '#lib/domain/types.js';
 
 	let {
 		year,

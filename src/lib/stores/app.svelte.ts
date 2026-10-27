@@ -1,21 +1,21 @@
-import { browser } from '$app/environment';
-import { buildSlots, groupBySemester, semestersOf, slotLabel } from '$lib/domain/calendar';
+import { browser } from '$app/env';
+import { buildSlots, groupBySemester, semestersOf, slotLabel } from '#lib/domain/calendar.js';
 import {
 	createEmptyProfile,
 	createPhysician,
 	inputSignature,
 	profileSummary,
 	uid
-} from '$lib/domain/factory';
-import { generateSchedule, isAvailable } from '$lib/domain/generator';
+} from '#lib/domain/factory.js';
+import { generateSchedule, isAvailable } from '#lib/domain/generator.js';
 import {
 	adjustTargets,
 	averageTargets,
 	capacityByCategory,
 	isFullyExempt,
 	quotaMismatches
-} from '$lib/domain/quotas';
-import { computeAllStats } from '$lib/domain/stats';
+} from '#lib/domain/quotas.js';
+import { computeAllStats } from '#lib/domain/stats.js';
 import type {
 	Category,
 	Physician,
@@ -25,9 +25,9 @@ import type {
 	Slot,
 	Unavailability,
 	WeekendMode
-} from '$lib/domain/types';
-import type { CsvPhysician } from '$lib/io/csv';
-import { buildBackup, parseBackup } from '$lib/io/json';
+} from '#lib/domain/types.js';
+import type { CsvPhysician } from '#lib/io/csv.js';
+import { buildBackup, parseBackup } from '#lib/io/json.js';
 import {
 	deleteStoredProfile,
 	readIndex,
@@ -38,9 +38,9 @@ import {
 	writeProfileRaw,
 	writeUi,
 	type UiState
-} from '$lib/io/storage';
-import { diffDays } from '$lib/utils/date';
-import { downloadText, safeFileName } from '$lib/utils/download';
+} from '#lib/io/storage.js';
+import { diffDays } from '#lib/utils/date.js';
+import { downloadText, safeFileName } from '#lib/utils/download.js';
 
 export type TabId = 'medecins' | 'synthese' | 'calendrier' | 'medecin';
 

@@ -8,9 +8,9 @@ import {
 	quotaTotal,
 	quotaMismatches,
 	targetsByCategory
-} from '$lib/domain/quotas';
-import { createPhysician } from '$lib/domain/factory';
-import type { Slot } from '$lib/domain/types';
+} from '#lib/domain/quotas.js';
+import { createPhysician } from '#lib/domain/factory.js';
+import type { Slot } from '#lib/domain/types.js';
 
 function slot(weights: Partial<Record<(typeof CATEGORIES)[number], number>>): Slot {
 	return {

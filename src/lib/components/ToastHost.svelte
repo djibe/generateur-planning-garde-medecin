@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { app } from '$lib/stores/app.svelte';
+	import { app } from '#lib/stores/app.svelte.js';
 
 	const icons: Record<string, string> = {
 		success: 'bi-check-circle-fill',

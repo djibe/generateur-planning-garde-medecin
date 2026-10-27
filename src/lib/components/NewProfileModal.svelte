@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { app } from '$lib/stores/app.svelte';
+	import { app } from '#lib/stores/app.svelte.js';
 	import Modal from './Modal.svelte';
 
 	let { onclose }: { onclose: () => void } = $props();

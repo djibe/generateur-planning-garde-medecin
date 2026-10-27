@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import AppHeader from '$lib/components/AppHeader.svelte';
-	import WelcomeScreen from '$lib/components/WelcomeScreen.svelte';
-	import { app, type TabId } from '$lib/stores/app.svelte';
-	import CalendarView from '$lib/views/CalendarView.svelte';
-	import DoctorView from '$lib/views/DoctorView.svelte';
-	import PhysiciansView from '$lib/views/PhysiciansView.svelte';
-	import SummaryView from '$lib/views/SummaryView.svelte';
+	import AppHeader from '#lib/components/AppHeader.svelte';
+	import WelcomeScreen from '#lib/components/WelcomeScreen.svelte';
+	import { app, type TabId } from '#lib/stores/app.svelte.js';
+	import CalendarView from '#lib/views/CalendarView.svelte';
+	import DoctorView from '#lib/views/DoctorView.svelte';
+	import PhysiciansView from '#lib/views/PhysiciansView.svelte';
+	import SummaryView from '#lib/views/SummaryView.svelte';
 
 	const tabs = [
 		{ id: 'medecins', label: 'Médecins & objectifs', icon: 'bi-people' },

@@ -1,9 +1,9 @@
-import { slotLabel } from '$lib/domain/calendar';
-import { CATEGORIES, CATEGORY_LABELS, quotaTotal, quotaMismatches } from '$lib/domain/quotas';
-import { computeAllStats, targetDeviation } from '$lib/domain/stats';
-import type { Physician, Profile, SemesterId, Slot } from '$lib/domain/types';
-import { formatLong, formatMedium } from '$lib/utils/date';
-import { downloadBlob, safeFileName } from '$lib/utils/download';
+import { slotLabel } from '#lib/domain/calendar.js';
+import { CATEGORIES, CATEGORY_LABELS, quotaTotal, quotaMismatches } from '#lib/domain/quotas.js';
+import { computeAllStats, targetDeviation } from '#lib/domain/stats.js';
+import type { Physician, Profile, SemesterId, Slot } from '#lib/domain/types.js';
+import { formatLong, formatMedium } from '#lib/utils/date.js';
+import { downloadBlob, safeFileName } from '#lib/utils/download.js';
 
 type CellValue = string | number | null;
 

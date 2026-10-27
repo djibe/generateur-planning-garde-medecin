@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { slotLabel } from '$lib/domain/calendar';
-	import { app } from '$lib/stores/app.svelte';
-	import { diffDays } from '$lib/utils/date';
+	import { slotLabel } from '#lib/domain/calendar.js';
+	import { app } from '#lib/stores/app.svelte.js';
+	import { diffDays } from '#lib/utils/date.js';
 	import Modal from './Modal.svelte';
 	import TypeBadge from './TypeBadge.svelte';
 

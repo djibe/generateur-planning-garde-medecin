@@ -1,9 +1,14 @@
 <script lang="ts">
-	import { CATEGORIES, CATEGORY_LABELS, CATEGORY_SHORT, isFullyExempt } from '$lib/domain/quotas';
-	import { targetDeviation } from '$lib/domain/stats';
-	import type { Category, Physician, SemesterId } from '$lib/domain/types';
-	import { exportSummaryWorkbook } from '$lib/io/excel';
-	import { app } from '$lib/stores/app.svelte';
+	import {
+		CATEGORIES,
+		CATEGORY_LABELS,
+		CATEGORY_SHORT,
+		isFullyExempt
+	} from '#lib/domain/quotas.js';
+	import { targetDeviation } from '#lib/domain/stats.js';
+	import type { Category, Physician, SemesterId } from '#lib/domain/types.js';
+	import { exportSummaryWorkbook } from '#lib/io/excel.js';
+	import { app } from '#lib/stores/app.svelte.js';
 
 	let exporting = $state(false);
 

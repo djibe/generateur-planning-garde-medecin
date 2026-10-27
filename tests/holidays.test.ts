@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { easterSunday, holidaysForYear, holidayMap } from '$lib/domain/holidays';
+import { easterSunday, holidaysForYear, holidayMap } from '#lib/domain/holidays.js';
 
 describe('easterSunday', () => {
 	it('matches known Gregorian dates', () => {

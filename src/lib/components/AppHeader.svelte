@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { app } from '$lib/stores/app.svelte';
-	import { formatDateTime } from '$lib/utils/date';
+	import { app } from '#lib/stores/app.svelte.js';
+	import { formatDateTime } from '#lib/utils/date.js';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import NewProfileModal from './NewProfileModal.svelte';
 

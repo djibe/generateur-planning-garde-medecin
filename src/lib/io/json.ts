@@ -1,4 +1,4 @@
-import type { Profile } from '$lib/domain/types';
+import type { Profile } from '#lib/domain/types.js';
 import { parseProfile } from './schema';
 
 export interface BackupPayload {

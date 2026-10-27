@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildSlots, groupBySemester, semestersOf, slotLabel } from '$lib/domain/calendar';
-import { eachDay } from '$lib/utils/date';
+import { buildSlots, groupBySemester, semestersOf, slotLabel } from '#lib/domain/calendar.js';
+import { eachDay } from '#lib/utils/date.js';
 
 describe('semestersOf', () => {
 	it('splits the year into two balanced semesters', () => {

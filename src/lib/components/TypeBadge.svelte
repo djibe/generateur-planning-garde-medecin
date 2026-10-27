@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { SLOT_TYPE_LABEL } from '$lib/domain/calendar';
-	import type { Category } from '$lib/domain/types';
+	import { SLOT_TYPE_LABEL } from '#lib/domain/calendar.js';
+	import type { Category } from '#lib/domain/types.js';
 
 	let { type, weekend = false }: { type: Category; weekend?: boolean } = $props();
 

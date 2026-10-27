@@ -1,8 +1,15 @@
+import adapter from '@sveltejs/adapter-static';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-	plugins: [sveltekit()],
+	plugins: [
+		sveltekit({
+			preprocess: vitePreprocess(),
+			adapter: adapter({ fallback: 'index.html', precompress: false, strict: true })
+		})
+	],
 	test: {
 		include: ['tests/**/*.test.ts'],
 		environment: 'node',
@@ -12,12 +19,12 @@ export default defineConfig({
 		chunkSizeWarningLimit: 1600
 	},
 	css: {
-    preprocessorOptions: {
-      scss: {
-        // Bootstrap's own SCSS emits Dart Sass deprecation warnings on
-        // newer Sass versions — silence noise from third-party deps only.
-        quietDeps: true
-      }
-    }
+		preprocessorOptions: {
+			scss: {
+				// Bootstrap's own SCSS emits Dart Sass deprecation warnings on
+				// newer Sass versions — silence noise from third-party deps only.
+				quietDeps: true
+			}
+		}
 	}
 });

@@ -1,12 +1,12 @@
 <script lang="ts">
-	import SwapModal from '$lib/components/SwapModal.svelte';
-	import TypeBadge from '$lib/components/TypeBadge.svelte';
-	import YearCalendar from '$lib/components/YearCalendar.svelte';
-	import { CATEGORIES } from '$lib/domain/quotas';
-	import type { SemesterId, Slot } from '$lib/domain/types';
-	import { exportPlanningWorkbook } from '$lib/io/excel';
-	import { app } from '$lib/stores/app.svelte';
-	import { formatLong, formatMedium } from '$lib/utils/date';
+	import SwapModal from '#lib/components/SwapModal.svelte';
+	import TypeBadge from '#lib/components/TypeBadge.svelte';
+	import YearCalendar from '#lib/components/YearCalendar.svelte';
+	import { CATEGORIES } from '#lib/domain/quotas.js';
+	import type { SemesterId, Slot } from '#lib/domain/types.js';
+	import { exportPlanningWorkbook } from '#lib/io/excel.js';
+	import { app } from '#lib/stores/app.svelte.js';
+	import { formatLong, formatMedium } from '#lib/utils/date.js';
 
 	let mode = $state<'calendar' | 'list'>('calendar');
 	let semester = $state<SemesterId>('S1');

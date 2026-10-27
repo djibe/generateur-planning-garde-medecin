@@ -6,8 +6,8 @@
 	import '../app.scss';
 
 	import { onMount } from 'svelte';
-	import ToastHost from '$lib/components/ToastHost.svelte';
-	import { app } from '$lib/stores/app.svelte';
+	import ToastHost from '#lib/components/ToastHost.svelte';
+	import { app } from '#lib/stores/app.svelte.js';
 
 	let { children } = $props();
 

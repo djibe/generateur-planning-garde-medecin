@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Profile } from '$lib/domain/types';
+import type { Profile } from '#lib/domain/types.js';
 
 const quotaSchema = z.object({
 	weekday: z.number().int().min(0).default(0),

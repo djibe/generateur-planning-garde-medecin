@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseCsv, toCsv } from '$lib/io/csv';
-import { createPhysician } from '$lib/domain/factory';
+import { parseCsv, toCsv } from '#lib/io/csv.js';
+import { createPhysician } from '#lib/domain/factory.js';
 
 describe('parseCsv', () => {
 	it('parses the documented format with a header', () => {

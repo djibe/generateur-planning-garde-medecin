@@ -1,7 +1,7 @@
 <script lang="ts">
-	import AvailabilityModal from '$lib/components/AvailabilityModal.svelte';
-	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import CsvImportModal from '$lib/components/CsvImportModal.svelte';
+	import AvailabilityModal from '#lib/components/AvailabilityModal.svelte';
+	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
+	import CsvImportModal from '#lib/components/CsvImportModal.svelte';
 	import {
 		CATEGORIES,
 		CATEGORY_LABELS,
@@ -11,11 +11,11 @@
 		isFullyExempt,
 		quotaTotal,
 		targetsByCategory
-	} from '$lib/domain/quotas';
-	import type { Category, Physician, SemesterId } from '$lib/domain/types';
-	import { exportPhysiciansWorkbook } from '$lib/io/excel';
-	import { app } from '$lib/stores/app.svelte';
-	import { formatMedium } from '$lib/utils/date';
+	} from '#lib/domain/quotas.js';
+	import type { Category, Physician, SemesterId } from '#lib/domain/types.js';
+	import { exportPhysiciansWorkbook } from '#lib/io/excel.js';
+	import { app } from '#lib/stores/app.svelte.js';
+	import { formatMedium } from '#lib/utils/date.js';
 
 	let semester = $state<SemesterId>('S1');
 	let csvOpen = $state(false);

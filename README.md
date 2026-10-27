@@ -1,6 +1,6 @@
 # Générateur de planning de garde — RecoMédicales
 
-Application web statique (SvelteKit 2 + Svelte 5) qui génère le planning annuel de garde
+Application web statique (SvelteKit 3 + Svelte 5) qui génère le planning annuel de garde
 d'un secteur de médecine générale, avec objectifs par médecin, jours fériés français,
 gestion des absences, échanges manuels et export Excel.
 
@@ -77,7 +77,7 @@ annuelle prend environ 0,2 s pour une douzaine de médecins.
 
 ## Démarrage
 
-Prérequis : **Node.js 22** (voir `.nvmrc`).
+Prérequis : **Node.js 22.17 ou supérieur** (voir `.nvmrc`).
 
 ```bash
 npm install
@@ -134,7 +134,7 @@ Le fichier `netlify.toml` est prêt :
 
 - commande de build : `npm run build`
 - dossier publié : `build`
-- Node.js 22
+- Node.js 22.17 ou supérieur
 - redirection SPA vers `index.html`
 - en-têtes de sécurité de base
 

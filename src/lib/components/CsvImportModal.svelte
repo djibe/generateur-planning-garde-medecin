@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { parseCsv } from '$lib/io/csv';
-	import { app } from '$lib/stores/app.svelte';
+	import { parseCsv } from '#lib/io/csv.js';
+	import { app } from '#lib/stores/app.svelte.js';
 	import Modal from './Modal.svelte';
 
 	let { onclose }: { onclose: () => void } = $props();

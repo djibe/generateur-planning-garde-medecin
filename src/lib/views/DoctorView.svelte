@@ -1,11 +1,11 @@
 <script lang="ts">
-	import TypeBadge from '$lib/components/TypeBadge.svelte';
-	import YearCalendar from '$lib/components/YearCalendar.svelte';
-	import { CATEGORIES, CATEGORY_LABELS, emptyQuota } from '$lib/domain/quotas';
-	import type { SemesterId, Slot } from '$lib/domain/types';
-	import { exportDoctorWorkbook } from '$lib/io/excel';
-	import { app } from '$lib/stores/app.svelte';
-	import { formatLong, formatMedium } from '$lib/utils/date';
+	import TypeBadge from '#lib/components/TypeBadge.svelte';
+	import YearCalendar from '#lib/components/YearCalendar.svelte';
+	import { CATEGORIES, CATEGORY_LABELS, emptyQuota } from '#lib/domain/quotas.js';
+	import type { SemesterId, Slot } from '#lib/domain/types.js';
+	import { exportDoctorWorkbook } from '#lib/io/excel.js';
+	import { app } from '#lib/stores/app.svelte.js';
+	import { formatLong, formatMedium } from '#lib/utils/date.js';
 
 	let exporting = $state(false);
 

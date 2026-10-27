@@ -1,5 +1,5 @@
 import { parseIndex, parseProfile, parseUi } from './schema';
-import type { Profile, ProfileSummary } from '$lib/domain/types';
+import type { Profile, ProfileSummary } from '#lib/domain/types.js';
 
 const PREFIX = 'gpgm:v1';
 
