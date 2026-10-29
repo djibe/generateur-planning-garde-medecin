@@ -63,6 +63,7 @@
 body {
 	background: var(--app-page-bg);
 	font-feature-settings: 'kern';
+	transition: all .3s;
 	-webkit-font-smoothing: antialiased;
 }
 
@@ -243,7 +244,7 @@ h6,
 	gap: 0.75rem;
 	flex-wrap: wrap;
 	padding: 0.9rem 1.1rem;
-	border-bottom: 1px solid var(--app-border);
+	border-bottom: 1px solid transparent; // var(--app-border);
 }
 
 .app-card-head h2 {
