@@ -2,6 +2,7 @@
 	import { tooltip } from '#lib/actions/tooltip.js';
 	import { onMount } from 'svelte';
 	import AppHeader from '#lib/components/AppHeader.svelte';
+	import GeneratingOverlay from '#lib/components/GeneratingOverlay.svelte';
 	import WelcomeScreen from '#lib/components/WelcomeScreen.svelte';
 	import { app, type TabId } from '#lib/stores/app.svelte.js';
 	import CalendarView from '#lib/views/CalendarView.svelte';
@@ -101,4 +102,7 @@
 			<DoctorView />
 		{/if}
 	</main>
+	{#if app.generating}
+		<GeneratingOverlay />
+	{/if}
 {/if}

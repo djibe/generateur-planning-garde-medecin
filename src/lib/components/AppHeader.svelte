@@ -123,11 +123,17 @@
 				<button
 					type="button"
 					class="btn btn-primary btn-sm px-3"
-					onclick={() => app.generate()}
-					disabled={!app.active.physicians.length}
+					onclick={() => void app.generate()}
+					disabled={!app.active.physicians.length || app.generating}
+					aria-busy={app.generating}
 					use:tooltip={'Générer ou régénérer le planning'}
 				>
-					<i class="bi bi-stars me-1"></i> Générer
+					{#if app.generating}
+						<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+						Calcul…
+					{:else}
+						<i class="bi bi-stars me-1"></i> Générer
+					{/if}
 				</button>
 			{/if}
 		</div>
@@ -166,7 +172,7 @@
 				{#if app.generated && app.unassignedCount > 0}
 					<span class="badge text-bg-danger">{app.unassignedCount} créneau(x) non pourvu(s)</span>
 				{:else if app.generated && app.equityGap > 1}
-					<span class="badge text-bg-warning">{app.equityGap} jour(s) d'écart d'équité</span>
+					<span class="badge text-bg-warning">{app.equityGap} jour(s) d'écart</span>
 				{/if}
 				<span class="ms-auto">
 					{#if app.saving}

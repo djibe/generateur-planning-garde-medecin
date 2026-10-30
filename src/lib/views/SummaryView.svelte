@@ -1,10 +1,15 @@
 <script lang="ts">
 	import { tooltip } from '#lib/actions/tooltip.js';
-	import { isAbsentAllYear, isUnavailableInSemester } from '#lib/domain/absence.js';
-	import { CATEGORIES, CATEGORY_LABELS, CATEGORY_SHORT, emptyQuota } from '#lib/domain/quotas.js';
+	import { isAbsentAllYear } from '#lib/domain/absence.js';
+	import {
+		CATEGORIES,
+		CATEGORY_LABELS,
+		CATEGORY_SHORT,
+		emptyQuota,
+		quotaTotal
+	} from '#lib/domain/quotas.js';
 	import { targetDeviation } from '#lib/domain/stats.js';
 	import type { Category, Physician, SemesterId } from '#lib/domain/types.js';
-	import { weekdayPossibleCategories } from '#lib/domain/weekdays.js';
 	import { exportSummaryWorkbook } from '#lib/io/excel.js';
 	import { app } from '#lib/stores/app.svelte.js';
 
@@ -33,14 +38,11 @@
 			? daysPerPhysician.reduce((sum, value) => sum + value, 0) / daysPerPhysician.length
 			: 0
 	);
-	const targetAverage = $derived(
-		availablePhysicians.length ? totalDays / availablePhysicians.length : 0
-	);
-
-	function balanceClass(days: number): string {
-		if (!targetAverage) return '';
-		if (days > targetAverage * 1.1) return 'over';
-		if (days < targetAverage * 0.9) return 'under';
+	function balanceClass(days: number, physicianId: string): string {
+		const target = quotaTotal(app.equitable.year.get(physicianId) ?? emptyQuota());
+		if (!target) return '';
+		if (days > target + 1) return 'over';
+		if (days < target - 1) return 'under';
 		return '';
 	}
 
@@ -64,24 +66,16 @@
 
 	function maxSpread(semester: SemesterId | 'year', category: Category): number {
 		if (!profile) return 0;
-		const eligible = availablePhysicians.filter((physician) => {
-			if (semester === 'year') {
-				return (
-					(!isUnavailableInSemester(physician, profile.year, 'S1') &&
-						weekdayPossibleCategories(physician, app.slots, 'S1').has(category)) ||
-					(!isUnavailableInSemester(physician, profile.year, 'S2') &&
-						weekdayPossibleCategories(physician, app.slots, 'S2').has(category))
-				);
-			}
-			return (
-				!isUnavailableInSemester(physician, profile.year, semester) &&
-				weekdayPossibleCategories(physician, app.slots, semester).has(category)
-			);
-		});
-		const values = eligible.map(
-			(physician) => bucket(physician.id, semester)?.weights[category] ?? 0
-		);
-		return values.length ? Math.max(...values) - Math.min(...values) : 0;
+		let max = 0;
+		for (const physician of physicians) {
+			const actual = bucket(physician.id, semester)?.weights[category] ?? 0;
+			const target =
+				semester === 'year'
+					? (app.equitable.year.get(physician.id) ?? emptyQuota())[category]
+					: (app.equitable[semester].get(physician.id) ?? emptyQuota())[category];
+			max = Math.max(max, Math.abs(actual - target));
+		}
+		return max;
 	}
 
 	function totalDaysFor(semester: SemesterId | 'year'): number {
@@ -176,7 +170,7 @@
 		</div>
 		<div class="col-6 col-md-3">
 			<div class="stat">
-				<div class="label">Écart d’équité max.</div>
+				<div class="label">Écart de jours max.</div>
 				<div class="value" class:text-warning={assignedSlots > 0 && app.equityGap > 1}>
 					{assignedSlots > 0 ? app.equityGap : '—'}
 				</div>
@@ -249,7 +243,7 @@
 									<th></th>
 								</tr>
 								<tr>
-									<th>Écart max</th>
+									<th>Écart cible max</th>
 									<th></th>
 									{#each CATEGORIES as category (category)}
 										{@const spread = maxSpread(semester, category)}
@@ -322,7 +316,7 @@
 									<td>
 										<div class="balance-track" title={`${days} jours`}>
 											<div
-												class="balance-fill {balanceClass(days)}"
+												class="balance-fill {balanceClass(days, physician.id)}"
 												style={`width:${maxDays > 0 ? Math.round((days / maxDays) * 100) : 0}%`}
 											></div>
 										</div>
@@ -360,7 +354,7 @@
 								<th></th>
 							</tr>
 							<tr>
-								<th>Écart max</th>
+								<th>Écart cible max</th>
 								<th></th>
 								<th></th>
 								<th></th>
@@ -380,8 +374,9 @@
 			</div>
 			<div class="app-card-foot section-note">
 				Les colonnes comptent les jours réels par catégorie principale : un jour férié en week-end
-				compte pour un jour férié et un jour de week-end. « Écart max » indique l’écart entre le
-				médecin le mieux et le moins bien servi pour la catégorie.
+				compte pour un jour férié et un jour de week-end. « Écart cible max » indique l’écart
+				maximal entre les jours attribués et la répartition cible compensée (absences et jours
+				indisponibles inclus).
 			</div>
 		</section>
 	{/if}

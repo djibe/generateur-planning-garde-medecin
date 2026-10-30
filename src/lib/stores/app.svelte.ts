@@ -1,5 +1,4 @@
 import { browser } from '$app/env';
-import { isUnavailableInSemester } from '#lib/domain/absence.js';
 import { buildSlots, groupBySemester, semestersOf, slotLabel } from '#lib/domain/calendar.js';
 import {
 	createEmptyProfile,
@@ -8,14 +7,18 @@ import {
 	profileSummary,
 	uid
 } from '#lib/domain/factory.js';
-import { generateSchedule, isAvailable } from '#lib/domain/generator.js';
-import { CATEGORIES, emptyEquitableTargets, equitableTargets } from '#lib/domain/quotas.js';
+import {
+	generateSchedule,
+	isAvailable,
+	type GenerateOptions,
+	type GenerateResult
+} from '#lib/domain/generator.js';
+import { emptyEquitableTargets, equitableTargets, quotaTotal } from '#lib/domain/quotas.js';
 import { computeAllStats } from '#lib/domain/stats.js';
 import {
 	WEEKDAYS,
 	canMakeWeekdayUnavailable,
-	nextWeekdayPreferences,
-	weekdayPossibleCategories
+	nextWeekdayPreferences
 } from '#lib/domain/weekdays.js';
 import type {
 	Physician,
@@ -42,6 +45,7 @@ import {
 } from '#lib/io/storage.js';
 import { diffDays } from '#lib/utils/date.js';
 import { downloadText, safeFileName } from '#lib/utils/download.js';
+import type { GenerateRequest, GenerateResponse } from '#lib/workers/generator.protocol.js';
 
 export type TabId = 'medecins' | 'synthese' | 'calendrier' | 'medecin';
 
@@ -63,6 +67,7 @@ class AppStore {
 	ui = $state<UiState>({ ...DEFAULT_UI });
 	ready = $state(false);
 	saving = $state(false);
+	generating = $state(false);
 	lastSavedAt = $state<string | null>(null);
 	storageError = $state<string | null>(null);
 	toasts = $state<Toast[]>([]);
@@ -101,32 +106,17 @@ class AppStore {
 		const profile = this.active;
 		if (!profile) return 0;
 		let max = 0;
-		for (const semester of ['S1', 'S2'] as SemesterId[]) {
-			const active = profile.physicians.filter(
-				(physician) => !isUnavailableInSemester(physician, profile.year, semester)
-			);
-			const possible = new Map(
-				active.map((physician) => [
-					physician.id,
-					weekdayPossibleCategories(physician, this.slots, semester)
-				])
-			);
-			for (const category of CATEGORIES) {
-				let maxCount = 0;
-				let minCount = Number.POSITIVE_INFINITY;
-				let eligibleCount = 0;
-				for (const physician of active) {
-					if (!possible.get(physician.id)?.has(category)) continue;
-					const entry = this.statsById.get(physician.id);
-					const target = this.equitable[semester].get(physician.id);
-					if (!entry || !target) continue;
-					const value = entry[semester].weights[category];
-					max = Math.max(max, Math.abs(value - target[category]));
-					maxCount = Math.max(maxCount, value);
-					minCount = Math.min(minCount, value);
-					eligibleCount += 1;
-				}
-				if (eligibleCount) max = Math.max(max, maxCount - minCount);
+		for (const physician of profile.physicians) {
+			const entry = this.statsById.get(physician.id);
+			if (!entry) continue;
+			const yearTarget = this.equitable.year.get(physician.id);
+			if (yearTarget) {
+				max = Math.max(max, Math.abs(entry.year.days - quotaTotal(yearTarget)));
+			}
+			for (const semester of ['S1', 'S2'] as SemesterId[]) {
+				const target = this.equitable[semester].get(physician.id);
+				if (!target) continue;
+				max = Math.max(max, Math.abs(entry[semester].days - quotaTotal(target)));
 			}
 		}
 		return max;
@@ -147,6 +137,13 @@ class AppStore {
 	private saveTimer: ReturnType<typeof setTimeout> | null = null;
 	private pendingSave: { id: string; json: string } | null = null;
 	private toastSequence = 0;
+	private generatorWorker: Worker | null = null;
+	private generationSequence = 0;
+	private pendingGeneration: {
+		id: number;
+		resolve: (result: GenerateResult) => void;
+		reject: (error: Error) => void;
+	} | null = null;
 
 	init(): void {
 		if (!browser || this.ready) return;
@@ -474,49 +471,110 @@ class AppStore {
 		return `${clean.slice(0, 12)}…`;
 	}
 
-	generate(): void {
+	async generate(): Promise<void> {
 		const profile = this.active;
 		if (!profile) return;
+		if (this.generating) return;
 		if (!profile.physicians.length) {
 			this.notify('danger', 'Ajoutez au moins un médecin avant de générer le planning.');
 			return;
 		}
 
+		this.generating = true;
+		const slots = $state.snapshot(this.slots);
 		const started = typeof performance !== 'undefined' ? performance.now() : Date.now();
-		const result = generateSchedule({
-			year: profile.year,
-			physicians: profile.physicians,
-			slots: this.slots,
-			pins: profile.pins,
-			seed: profile.seed
-		});
-		const elapsed = Math.round(
-			(typeof performance !== 'undefined' ? performance.now() : Date.now()) - started
-		);
+		try {
+			const result = await this.requestGeneration({
+				year: profile.year,
+				physicians: $state.snapshot(profile.physicians),
+				slots,
+				pins: $state.snapshot(profile.pins),
+				seed: profile.seed
+			});
+			if (this.active?.id !== profile.id) {
+				this.notify('info', 'Profil changé pendant le calcul : planning non appliqué.');
+				return;
+			}
+			const elapsed = Math.round(
+				(typeof performance !== 'undefined' ? performance.now() : Date.now()) - started
+			);
 
-		const assignments: Record<SemesterId, Record<string, string>> = { S1: {}, S2: {} };
-		const slotById = new Map(this.slots.map((slot) => [slot.id, slot]));
-		for (const [slotId, physicianId] of Object.entries(result.assignments)) {
-			const slot = slotById.get(slotId);
-			if (slot) assignments[slot.semester][slotId] = physicianId;
+			const assignments: Record<SemesterId, Record<string, string>> = { S1: {}, S2: {} };
+			const slotById = new Map(slots.map((slot) => [slot.id, slot]));
+			for (const [slotId, physicianId] of Object.entries(result.assignments)) {
+				const slot = slotById.get(slotId);
+				if (slot) assignments[slot.semester][slotId] = physicianId;
+			}
+
+			profile.assignments = assignments;
+			profile.generatedAt = new Date().toISOString();
+			profile.generatedSignature = inputSignature(profile);
+			profile.updatedAt = profile.generatedAt;
+			profile.seed = (profile.seed + 1) >>> 0;
+			profile.pins = Object.fromEntries(
+				Object.entries(profile.pins).filter(([slotId]) => slotById.has(slotId))
+			) as Record<string, string>;
+
+			const assigned = Object.keys(result.assignments).length;
+			this.notify(
+				result.warnings.length ? 'info' : 'success',
+				`Planning généré : ${assigned}/${slots.length} créneaux en ${elapsed} ms.`
+			);
+			for (const warning of result.warnings.slice(0, 2)) this.notify('danger', warning);
+			this.persistIndex();
+		} catch (error) {
+			this.notify(
+				'danger',
+				`Le calcul du planning a échoué : ${
+					error instanceof Error ? error.message : 'erreur inconnue'
+				}`
+			);
+		} finally {
+			this.generating = false;
 		}
+	}
 
-		profile.assignments = assignments;
-		profile.generatedAt = new Date().toISOString();
-		profile.generatedSignature = inputSignature(profile);
-		profile.updatedAt = profile.generatedAt;
-		profile.seed = (profile.seed + 1) >>> 0;
-		profile.pins = Object.fromEntries(
-			Object.entries(profile.pins).filter(([slotId]) => slotById.has(slotId))
-		) as Record<string, string>;
+	/** Runs the generator in a worker so the UI (and the spinner) stays responsive. */
+	private requestGeneration(options: GenerateOptions): Promise<GenerateResult> {
+		if (typeof Worker === 'undefined') {
+			return Promise.resolve().then(() => generateSchedule(options));
+		}
+		try {
+			const worker = this.ensureGeneratorWorker();
+			const id = (this.generationSequence += 1);
+			return new Promise<GenerateResult>((resolve, reject) => {
+				this.pendingGeneration = { id, resolve, reject };
+				worker.postMessage({ id, options } satisfies GenerateRequest);
+			});
+		} catch {
+			return Promise.resolve().then(() => generateSchedule(options));
+		}
+	}
 
-		const assigned = Object.keys(result.assignments).length;
-		this.notify(
-			result.warnings.length ? 'info' : 'success',
-			`Planning généré : ${assigned}/${this.slots.length} créneaux en ${elapsed} ms.`
-		);
-		for (const warning of result.warnings.slice(0, 2)) this.notify('danger', warning);
-		this.persistIndex();
+	private ensureGeneratorWorker(): Worker {
+		if (this.generatorWorker) return this.generatorWorker;
+		const worker = new Worker(new URL('../workers/generator.worker.ts', import.meta.url), {
+			type: 'module'
+		});
+		worker.addEventListener('message', (event: MessageEvent<GenerateResponse>) => {
+			const pending = this.pendingGeneration;
+			if (!pending || event.data.id !== pending.id) return;
+			this.pendingGeneration = null;
+			if (event.data.result) {
+				pending.resolve(event.data.result);
+			} else {
+				pending.reject(new Error(event.data.error ?? 'Calcul du planning impossible.'));
+			}
+		});
+		worker.addEventListener('error', (event) => {
+			const pending = this.pendingGeneration;
+			this.pendingGeneration = null;
+			worker.terminate();
+			this.generatorWorker = null;
+			pending?.reject(new Error(event.message || 'Le calcul du planning a échoué.'));
+		});
+		this.generatorWorker = worker;
+		return worker;
 	}
 
 	swapWithNearest(slotId: string, physicianId: string): void {

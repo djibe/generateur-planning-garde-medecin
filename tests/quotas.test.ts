@@ -9,6 +9,7 @@ import {
 	quotaTotal
 } from '#lib/domain/quotas.js';
 import { createPhysician } from '#lib/domain/factory.js';
+import { buildSlots } from '#lib/domain/calendar.js';
 import type { SemesterId, Slot } from '#lib/domain/types.js';
 
 function slot(
@@ -172,5 +173,39 @@ describe('capacity and equitable targets', () => {
 			.sort((left, right) => left - right);
 		expect(totals).toEqual([6, 7, 7]);
 		expect(Math.max(...totals) - Math.min(...totals)).toBe(1);
+	});
+
+	it('rotates rounding remainders so annual targets stay within one day', () => {
+		const physicians = Array.from({ length: 12 }, (_, index) =>
+			createPhysician(index + 1, `Médecin ${index + 1}`)
+		);
+		const slots = buildSlots(2026, 'combined');
+		const targets = equitableTargets(physicians, 2026, slots);
+		const totals = physicians.map((physician) => quotaTotal(targets.year.get(physician.id)!));
+		expect(Math.max(...totals) - Math.min(...totals)).toBeLessThanOrEqual(1);
+		for (const semester of ['S1', 'S2'] as const) {
+			const values = physicians.map((physician) =>
+				quotaTotal(targets[semester].get(physician.id)!)
+			);
+			expect(Math.max(...values) - Math.min(...values)).toBeLessThanOrEqual(1);
+		}
+	});
+
+	it('compensates a physician who can never work Fridays', () => {
+		const physicians = Array.from({ length: 12 }, (_, index) =>
+			createPhysician(index + 1, `Médecin ${index + 1}`)
+		);
+		const noFriday = physicians[0];
+		noFriday.unavailableWeekdays = ['ven'];
+		const slots = buildSlots(2026, 'combined');
+		const targets = equitableTargets(physicians, 2026, slots);
+		expect(targets.year.get(noFriday.id)?.friday).toBe(0);
+		const totals = physicians.map((physician) => quotaTotal(targets.year.get(physician.id)!));
+		expect(Math.max(...totals) - Math.min(...totals)).toBeLessThanOrEqual(1);
+		const fridayTotal = physicians.reduce(
+			(sum, physician) => sum + (targets.year.get(physician.id)?.friday ?? 0),
+			0
+		);
+		expect(fridayTotal).toBe(capacityByCategory(slots).friday);
 	});
 });

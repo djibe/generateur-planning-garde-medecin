@@ -814,6 +814,54 @@ dialog.app-modal::backdrop {
 	background: color-mix(in srgb, var(--bs-tertiary-bg) 45%, transparent);
 }
 
+/* ----------------------------------------------------------- calculating */
+
+.calculating-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 1080;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 1.5rem;
+	background: color-mix(in srgb, var(--bs-body-bg) 55%, transparent);
+	backdrop-filter: blur(4px);
+}
+
+.calculating-card {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.65rem;
+	padding: 1.75rem 2.25rem;
+	text-align: center;
+	background: var(--app-surface);
+	border: 1px solid var(--app-border);
+	border-radius: var(--app-radius);
+	box-shadow: var(--app-shadow);
+}
+
+.calculating-card .spinner-border {
+	width: 2.5rem;
+	height: 2.5rem;
+	margin-bottom: 0.15rem;
+}
+
+.calculating-title {
+	font-weight: 600;
+}
+
+.calculating-hint {
+	font-size: 0.8rem;
+	color: var(--bs-secondary-color);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.calculating-card .spinner-border {
+		animation-duration: 2.4s;
+	}
+}
+
 /* ---------------------------------------------------------------- toasts */
 
 .toast-stack {

@@ -1,7 +1,7 @@
 import { diffDays } from '../utils/date';
 import { isAbsentAllYear, isAbsentOn, isUnavailableInSemester } from './absence';
 import { mulberry32 } from './rng';
-import { CATEGORIES, CATEGORY_LABELS, emptyQuota, equitableTargets } from './quotas';
+import { CATEGORIES, CATEGORY_LABELS, emptyQuota, equitableTargets, quotaTotal } from './quotas';
 import type { Category, Physician, Quota, SemesterId, Slot } from './types';
 import {
 	isSlotBlockedByWeekdays,
@@ -38,6 +38,8 @@ const RANK: Record<Category, number> = {
 const FAIRNESS_WEIGHT = 1_000_000;
 const SPACING_WEIGHT = 1_000;
 const GREEDY_NOISE = 0.01;
+/** Total days are the primary fairness objective; categories come second. */
+const TOTAL_DAYS_WEIGHT = 4;
 
 function slotRank(slot: Slot): number {
 	return RANK[slot.type] * 10 + (slot.isWeekendBlock ? 5 : 0);
@@ -57,6 +59,8 @@ interface Move {
 	otherFrom?: string;
 	/** Total absolute deviation from the equitable targets. */
 	fairness: number;
+	/** Total absolute deviation from the total-day targets. */
+	days: number;
 	/** Lexicographic spread score, used to break fairness ties. */
 	spread: number;
 	spacing: number;
@@ -66,7 +70,7 @@ interface Move {
 /**
  * Greedy fill followed by a seeded local search (reassignments + swaps).
  * Hard constraints: absences, unavailable weekdays, pinned slots.
- * Soft objectives, in strict order: equitable days per category, spacing,
+ * Soft objectives, in strict order: total days, days per category, spacing,
  * weekday preferences.
  */
 export function generateSchedule(options: GenerateOptions): GenerateResult {
@@ -118,6 +122,10 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 				? fairTargets.S1
 				: equitableTargets(physicians, options.year, slots, previousCounts).S2;
 		const physiciansById = new Map(active.map((physician) => [physician.id, physician]));
+		const totalTargets = new Map<string, number>();
+		for (const physician of active) {
+			totalTargets.set(physician.id, quotaTotal(targets.get(physician.id) ?? emptyQuota()));
+		}
 		const possible = new Map<string, Set<Category>>();
 		for (const physician of active) {
 			possible.set(physician.id, weekdayPossibleCategories(physician, semesterSlots, semester));
@@ -134,17 +142,21 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 
 		const assignment = new Map<string, string>();
 		const counts = new Map<string, Quota>();
+		const dayCounts = new Map<string, number>();
+		const slotDayWeights = new Map<string, number>();
 		const assignedSets = new Map<string, Set<string>>();
 		const assignedLists = new Map<string, Slot[]>();
 		const spacingCosts = new Map<string, number>();
 		const preferenceCosts = new Map<string, number>();
 		for (const physician of active) {
 			counts.set(physician.id, emptyQuota());
+			dayCounts.set(physician.id, 0);
 			assignedSets.set(physician.id, new Set<string>());
 			assignedLists.set(physician.id, []);
 			spacingCosts.set(physician.id, 0);
 			preferenceCosts.set(physician.id, 0);
 		}
+		for (const slot of semesterSlots) slotDayWeights.set(slot.id, quotaTotal(slot.weights));
 
 		const gapCost = (left: Slot | undefined, right: Slot | undefined): number => {
 			if (!left || !right) return 0;
@@ -172,6 +184,10 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 			if (!set || !count || !list || set.has(slot.id)) return;
 			set.add(slot.id);
 			for (const category of CATEGORIES) count[category] += slot.weights[category];
+			dayCounts.set(
+				physicianId,
+				(dayCounts.get(physicianId) ?? 0) + (slotDayWeights.get(slot.id) ?? 0)
+			);
 
 			const index = insertIndex(list, slot.start);
 			const previous = list[index - 1];
@@ -199,6 +215,10 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 			const list = assignedLists.get(physicianId);
 			if (!set || !count || !list || !set.delete(slot.id)) return;
 			for (const category of CATEGORIES) count[category] -= slot.weights[category];
+			dayCounts.set(
+				physicianId,
+				(dayCounts.get(physicianId) ?? 0) - (slotDayWeights.get(slot.id) ?? 0)
+			);
 
 			let index = insertIndex(list, slot.start);
 			if (list[index]?.id !== slot.id) {
@@ -236,18 +256,30 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 			return cost;
 		};
 
-		/** Total absolute deviation from the equitable targets. */
-		const deviationScore = (): number => {
-			let total = 0;
+		const daysCostOf = (physicianId: string): number => {
+			const diff = (dayCounts.get(physicianId) ?? 0) - (totalTargets.get(physicianId) ?? 0);
+			return diff * diff;
+		};
+
+		/**
+		 * Total absolute deviations. `days` is the primary fairness metric and
+		 * `category` the secondary one.
+		 */
+		const deviationScore = (): { days: number; category: number } => {
+			let days = 0;
+			let categoryTotal = 0;
 			for (const physician of active) {
 				const count = counts.get(physician.id);
 				const target = targets.get(physician.id);
 				if (!count || !target) continue;
 				for (const category of CATEGORIES) {
-					total += Math.abs(count[category] - target[category]);
+					categoryTotal += Math.abs(count[category] - target[category]);
 				}
+				days += Math.abs(
+					(dayCounts.get(physician.id) ?? 0) - (totalTargets.get(physician.id) ?? 0)
+				);
 			}
-			return total;
+			return { days, category: categoryTotal };
 		};
 
 		/**
@@ -285,7 +317,8 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 			const target = targets.get(physicianId);
 			if (!count || !target) return 0;
 			return (
-				fairnessCostOf(physicianId) * FAIRNESS_WEIGHT +
+				(fairnessCostOf(physicianId) + daysCostOf(physicianId) * TOTAL_DAYS_WEIGHT) *
+					FAIRNESS_WEIGHT +
 				(spacingCosts.get(physicianId) ?? 0) * SPACING_WEIGHT +
 				(preferenceCosts.get(physicianId) ?? 0)
 			);
@@ -294,6 +327,7 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 		const rebuild = (source: Map<string, string>): void => {
 			for (const physician of active) {
 				counts.set(physician.id, emptyQuota());
+				dayCounts.set(physician.id, 0);
 				assignedSets.set(physician.id, new Set<string>());
 				assignedLists.set(physician.id, []);
 				spacingCosts.set(physician.id, 0);
@@ -314,7 +348,7 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 			removeSlot(from, slot);
 			addSlot(to, slot);
 			assignment.set(slot.id, to);
-			const afterFairness = deviationScore();
+			const afterScore = deviationScore();
 			const afterSpread = spreadScore();
 			const afterSpacing = (spacingCosts.get(from) ?? 0) + (spacingCosts.get(to) ?? 0);
 			const afterPreference = (preferenceCosts.get(from) ?? 0) + (preferenceCosts.get(to) ?? 0);
@@ -326,7 +360,8 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 				slot,
 				from,
 				to,
-				fairness: afterFairness,
+				fairness: afterScore.category,
+				days: afterScore.days,
 				spread: afterSpread,
 				spacing: afterSpacing - beforeSpacing,
 				preference: afterPreference - beforePreference
@@ -351,7 +386,7 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 			addSlot(firstFrom, second);
 			assignment.set(second.id, firstFrom);
 
-			const afterFairness = deviationScore();
+			const afterScore = deviationScore();
 			const afterSpread = spreadScore();
 			const afterSpacing = (spacingCosts.get(firstFrom) ?? 0) + (spacingCosts.get(secondFrom) ?? 0);
 			const afterPreference =
@@ -371,7 +406,8 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 				to: secondFrom,
 				other: second,
 				otherFrom: secondFrom,
-				fairness: afterFairness,
+				fairness: afterScore.category,
+				days: afterScore.days,
 				spread: afterSpread,
 				spacing: afterSpacing - beforeSpacing,
 				preference: afterPreference - beforePreference
@@ -399,20 +435,35 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 		const isBetter = (
 			move: Move,
 			best: Move | null,
-			phase: 'fairness' | 'spacing' | 'preference',
+			phase: 'days' | 'fairness' | 'spacing' | 'preference',
 			currentFairness: number,
+			currentDays: number,
 			currentSpread: number
 		): boolean => {
-			if (phase === 'fairness') {
-				if (move.fairness > currentFairness) return false;
-				if (move.fairness === currentFairness && move.spread >= currentSpread) return false;
+			if (phase === 'days' || phase === 'fairness') {
+				if (move.days > currentDays) return false;
+				if (move.days === currentDays && move.fairness > currentFairness) return false;
+				if (
+					move.days === currentDays &&
+					move.fairness === currentFairness &&
+					move.spread >= currentSpread
+				) {
+					return false;
+				}
 				if (!best) return true;
+				if (move.days !== best.days) return move.days < best.days;
 				if (move.fairness !== best.fairness) return move.fairness < best.fairness;
 				if (move.spread !== best.spread) return move.spread < best.spread;
 				if (move.spacing !== best.spacing) return move.spacing < best.spacing;
 				return move.preference < best.preference;
 			}
-			if (move.fairness !== currentFairness || move.spread !== currentSpread) return false;
+			if (
+				move.days !== currentDays ||
+				move.fairness !== currentFairness ||
+				move.spread !== currentSpread
+			) {
+				return false;
+			}
 			if (phase === 'spacing') {
 				if (move.spacing >= 0) return false;
 				if (!best) return true;
@@ -423,13 +474,15 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 			return !best || move.preference < best.preference;
 		};
 
-		const improve = (phase: 'fairness' | 'spacing' | 'preference'): void => {
+		const improve = (phase: 'days' | 'fairness' | 'spacing' | 'preference'): void => {
 			const nonPinned = semesterSlots.filter((slot) => !pins[slot.id]);
-			const maxPasses = phase === 'fairness' ? 20 : phase === 'spacing' ? 20 : 8;
+			const maxPasses = phase === 'preference' ? 8 : 20;
 			let guard = 0;
 			while (guard < maxPasses) {
 				guard += 1;
-				const currentFairness = deviationScore();
+				const currentScore = deviationScore();
+				const currentFairness = currentScore.category;
+				const currentDays = currentScore.days;
 				const currentSpread = spreadScore();
 				let best: Move | null = null;
 
@@ -439,7 +492,36 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 					for (const to of eligible.get(slot.id) ?? []) {
 						if (to === from) continue;
 						const move = measureReassign(slot, from, to);
-						if (isBetter(move, best, phase, currentFairness, currentSpread)) best = move;
+						if (isBetter(move, best, phase, currentFairness, currentDays, currentSpread)) {
+							best = move;
+						}
+					}
+				}
+
+				if (!best && phase === 'days') {
+					const overSlots: Slot[] = [];
+					const underSlots: Slot[] = [];
+					for (const slot of nonPinned) {
+						const physicianId = assignment.get(slot.id);
+						if (!physicianId) continue;
+						const difference =
+							(dayCounts.get(physicianId) ?? 0) - (totalTargets.get(physicianId) ?? 0);
+						if (difference > 0) overSlots.push(slot);
+						if (difference < 0) underSlots.push(slot);
+					}
+					for (const first of overSlots) {
+						const firstFrom = assignment.get(first.id);
+						if (!firstFrom) continue;
+						for (const second of underSlots) {
+							const secondFrom = assignment.get(second.id);
+							if (!secondFrom || secondFrom === firstFrom) continue;
+							if (!eligible.get(first.id)?.includes(secondFrom)) continue;
+							if (!eligible.get(second.id)?.includes(firstFrom)) continue;
+							const move = measureSwap(first, second, firstFrom, secondFrom);
+							if (isBetter(move, best, phase, currentFairness, currentDays, currentSpread)) {
+								best = move;
+							}
+						}
 					}
 				}
 
@@ -466,7 +548,8 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 							if (!eligible.get(first.id)?.includes(secondFrom)) continue;
 							if (!eligible.get(second.id)?.includes(firstFrom)) continue;
 							const move = measureSwap(first, second, firstFrom, secondFrom);
-							if (isBetter(move, best, phase, currentFairness, currentSpread)) best = move;
+							if (isBetter(move, best, phase, currentFairness, currentDays, currentSpread))
+								best = move;
 						}
 					}
 				}
@@ -491,7 +574,8 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 								if (!eligible.get(first.id)?.includes(secondFrom)) continue;
 								if (!eligible.get(second.id)?.includes(firstFrom)) continue;
 								const move = measureSwap(first, second, firstFrom, secondFrom);
-								if (isBetter(move, best, phase, currentFairness, currentSpread)) best = move;
+								if (isBetter(move, best, phase, currentFairness, currentDays, currentSpread))
+									best = move;
 							}
 						}
 					}
@@ -524,7 +608,8 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 							if (!eligible.get(first.id)?.includes(secondFrom)) continue;
 							if (!eligible.get(second.id)?.includes(firstFrom)) continue;
 							const move = measureSwap(first, second, firstFrom, secondFrom);
-							if (isBetter(move, best, phase, currentFairness, currentSpread)) best = move;
+							if (isBetter(move, best, phase, currentFairness, currentDays, currentSpread))
+								best = move;
 						}
 					}
 				}
@@ -647,6 +732,7 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 		}
 
 		rebuild(bestAssignment);
+		improve('days');
 		improve('fairness');
 		improve('spacing');
 		improve('preference');
@@ -660,24 +746,27 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 		}
 
 		const gaps: string[] = [];
+		let maxDaysDeviation = 0;
+		for (const physician of active) {
+			maxDaysDeviation = Math.max(
+				maxDaysDeviation,
+				Math.abs((dayCounts.get(physician.id) ?? 0) - (totalTargets.get(physician.id) ?? 0))
+			);
+		}
+		if (maxDaysDeviation > 1) {
+			gaps.push(`Jours (écart ${maxDaysDeviation})`);
+		}
 		for (const category of CATEGORIES) {
 			let maxDeviation = 0;
-			let maxCount = 0;
-			let minCount = Number.POSITIVE_INFINITY;
-			let eligibleCount = 0;
 			for (const physician of active) {
 				if (!possible.get(physician.id)?.has(category)) continue;
 				const count = counts.get(physician.id);
 				const target = targets.get(physician.id);
 				if (!count || !target) continue;
 				maxDeviation = Math.max(maxDeviation, Math.abs(count[category] - target[category]));
-				maxCount = Math.max(maxCount, count[category]);
-				minCount = Math.min(minCount, count[category]);
-				eligibleCount += 1;
 			}
-			const spread = eligibleCount ? maxCount - minCount : 0;
-			if (maxDeviation > 1 || spread > 1) {
-				gaps.push(`${CATEGORY_LABELS[category]} (écart ${Math.max(maxDeviation, spread)})`);
+			if (maxDeviation > 1) {
+				gaps.push(`${CATEGORY_LABELS[category]} (écart ${maxDeviation})`);
 			}
 		}
 		if (gaps.length) {

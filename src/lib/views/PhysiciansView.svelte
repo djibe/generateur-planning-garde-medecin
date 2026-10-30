@@ -566,10 +566,12 @@
 				</div>
 			{/if}
 			<div class="app-card-foot small text-secondary">
-				La répartition est calculée automatiquement : chaque catégorie est partagée aussi
-				équitablement que possible entre les médecins éligibles, au prorata de leurs absences. Le
-				générateur privilégie cet équilibre, puis l’espacement, puis les jours préférés. Un jour
-				férié en week-end compte pour un jour férié et un jour de week-end.
+				La répartition est calculée automatiquement : le total de jours est partagé aussi
+				équitablement que possible, au prorata des absences. Un médecin qui ne peut jamais
+				travailler un jour donné reçoit davantage de gardes dans les catégories qu’il peut couvrir.
+				Le générateur privilégie le total de jours, puis l’équilibre par catégorie, puis
+				l’espacement, puis les jours préférés. Un jour férié en week-end compte pour un jour férié
+				et un jour de week-end.
 			</div>
 		</section>
 	{/if}
