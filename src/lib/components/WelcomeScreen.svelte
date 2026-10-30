@@ -6,6 +6,7 @@
 	let area = $state('');
 	let name = $state('');
 	let year = $state(currentYear);
+	let alsaceMoselle = $state(false);
 	let error = $state<string | null>(null);
 
 	const suggested = $derived(`${area.trim() || 'Mon secteur'} — ${year}`);
@@ -16,7 +17,7 @@
 			error = 'Choisissez une année entre 2000 et 2200.';
 			return;
 		}
-		app.createProfile({ name: name.trim() || suggested, area, year });
+		app.createProfile({ name: name.trim() || suggested, area, year, alsaceMoselle });
 	}
 
 	async function onImport(event: Event) {
@@ -99,6 +100,21 @@
 										bind:value={name}
 										placeholder={suggested}
 									/>
+								</div>
+							</div>
+							<div>
+								<div class="form-check">
+									<input
+										id="welcome-alsace"
+										class="form-check-input"
+										type="checkbox"
+										bind:checked={alsaceMoselle}
+									/>
+									<label class="form-check-label" for="welcome-alsace">Alsace-Moselle</label>
+								</div>
+								<div class="form-text">
+									Ajoute le Vendredi saint et la Saint-Étienne (26 décembre) aux 11 jours fériés
+									métropolitains.
 								</div>
 							</div>
 							{#if error}

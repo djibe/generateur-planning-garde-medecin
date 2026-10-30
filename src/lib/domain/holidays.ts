@@ -6,6 +6,11 @@ export interface Holiday {
 	name: string;
 }
 
+export interface HolidayOptions {
+	/** Adds Good Friday and Saint Stephen's Day (26 December), specific to Alsace-Moselle. */
+	alsaceMoselle?: boolean;
+}
+
 /**
  * Gregorian Easter Sunday (Meeus / Jones / Butcher).
  * Returns an ISO date.
@@ -28,8 +33,11 @@ export function easterSunday(year: number): ISODate {
 	return `${year}-${pad2(month)}-${pad2(day)}`;
 }
 
-/** The 11 French metropolitan public holidays for a year. */
-export function holidaysForYear(year: number): Holiday[] {
+/**
+ * The 11 French metropolitan public holidays for a year, plus the 2
+ * Alsace-Moselle specific holidays when requested (13 in total).
+ */
+export function holidaysForYear(year: number, options: HolidayOptions = {}): Holiday[] {
 	const easter = easterSunday(year);
 	const holidays: Holiday[] = [
 		{ date: `${year}-01-01`, name: "Jour de l'an" },
@@ -44,6 +52,12 @@ export function holidaysForYear(year: number): Holiday[] {
 		{ date: `${year}-11-11`, name: 'Armistice 1918' },
 		{ date: `${year}-12-25`, name: 'Noël' }
 	];
+	if (options.alsaceMoselle) {
+		holidays.push(
+			{ date: addDays(easter, -2), name: 'Vendredi saint' },
+			{ date: `${year}-12-26`, name: 'Saint-Étienne' }
+		);
+	}
 	return holidays.sort((left, right) => left.date.localeCompare(right.date));
 }
 
@@ -51,10 +65,10 @@ export function holidaysForYear(year: number): Holiday[] {
  * Holidays of the year + 1 January of the next year, so that 31/12 is
  * correctly detected as the eve of a public holiday.
  */
-export function holidayMap(year: number): Map<ISODate, string> {
+export function holidayMap(year: number, options: HolidayOptions = {}): Map<ISODate, string> {
 	const map = new Map<ISODate, string>();
-	for (const holiday of holidaysForYear(year)) map.set(holiday.date, holiday.name);
-	for (const holiday of holidaysForYear(year + 1)) {
+	for (const holiday of holidaysForYear(year, options)) map.set(holiday.date, holiday.name);
+	for (const holiday of holidaysForYear(year + 1, options)) {
 		if (!map.has(holiday.date)) map.set(holiday.date, holiday.name);
 	}
 	return map;

@@ -42,3 +42,25 @@ describe('holidaysForYear', () => {
 		expect(map.get('2027-01-01')).toBe("Jour de l'an");
 	});
 });
+
+describe('Alsace-Moselle holidays', () => {
+	it('adds Good Friday and Saint Stephen', () => {
+		const holidays = holidaysForYear(2026, { alsaceMoselle: true });
+		expect(holidays).toHaveLength(13);
+		const dates = holidays.map((holiday) => holiday.date);
+		expect(dates).toContain('2026-04-03'); // Vendredi saint
+		expect(dates).toContain('2026-12-26'); // Saint-Étienne
+	});
+
+	it('keeps them out by default', () => {
+		const dates = holidaysForYear(2026).map((holiday) => holiday.date);
+		expect(dates).not.toContain('2026-04-03');
+		expect(dates).not.toContain('2026-12-26');
+	});
+
+	it('names them and exposes them in the map', () => {
+		const map = holidayMap(2026, { alsaceMoselle: true });
+		expect(map.get('2026-04-03')).toBe('Vendredi saint');
+		expect(map.get('2026-12-26')).toBe('Saint-Étienne');
+	});
+});

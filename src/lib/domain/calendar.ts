@@ -1,5 +1,5 @@
 import { addDays, formatMedium, weekdayIndex, yearEnd, yearStart } from '../utils/date';
-import { holidayMap } from './holidays';
+import { holidayMap, type HolidayOptions } from './holidays';
 import { emptyQuota, emptyTags } from './quotas';
 import type { Category, ISODate, SemesterId, Slot, WeekendMode } from './types';
 
@@ -31,8 +31,8 @@ export function primaryType(date: ISODate, holidays: Map<string, string>): Categ
 	return 'weekday';
 }
 
-export function buildSlots(year: number, mode: WeekendMode): Slot[] {
-	const holidays = holidayMap(year);
+export function buildSlots(year: number, mode: WeekendMode, options: HolidayOptions = {}): Slot[] {
+	const holidays = holidayMap(year, options);
 	const slots: Slot[] = [];
 	const end = yearEnd(year);
 	let cursor = yearStart(year);

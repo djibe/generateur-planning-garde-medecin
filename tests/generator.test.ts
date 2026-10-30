@@ -18,7 +18,7 @@ function makeProfile(count = 12, mode: WeekendMode = 'combined'): Profile {
 		name: 'Test',
 		area: 'Test',
 		year: 2026,
-		settings: { weekendMode: mode },
+		settings: { weekendMode: mode, alsaceMoselle: false },
 		physicians,
 		assignments: { S1: {}, S2: {} },
 		pins: {},

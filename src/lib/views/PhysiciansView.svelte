@@ -241,6 +241,18 @@
 					</div>
 				</div>
 			</div>
+			<div class="mt-3">
+				<div class="form-check">
+					<input
+						id="profile-alsace"
+						class="form-check-input"
+						type="checkbox"
+						checked={profile.settings.alsaceMoselle}
+						onchange={(event) => app.setAlsaceMoselle(event.currentTarget.checked)}
+					/>
+					<label class="form-check-label" for="profile-alsace">Alsace-Moselle</label>
+				</div>
+			</div>
 		</div>
 	</section>
 

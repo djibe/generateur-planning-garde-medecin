@@ -68,7 +68,11 @@ class AppStore {
 	toasts = $state<Toast[]>([]);
 
 	slots = $derived.by(() =>
-		this.active ? buildSlots(this.active.year, this.active.settings.weekendMode) : []
+		this.active
+			? buildSlots(this.active.year, this.active.settings.weekendMode, {
+					alsaceMoselle: this.active.settings.alsaceMoselle
+				})
+			: []
 	);
 
 	semesters = $derived.by(() => (this.active ? semestersOf(this.active.year) : []));
@@ -199,7 +203,12 @@ class AppStore {
 
 	// ---------------------------------------------------------------- profiles
 
-	createProfile(input: { name: string; area: string; year: number }): void {
+	createProfile(input: {
+		name: string;
+		area: string;
+		year: number;
+		alsaceMoselle?: boolean;
+	}): void {
 		this.flushSave();
 		const profile = createEmptyProfile(input);
 		writeProfile(profile);
@@ -295,6 +304,22 @@ class AppStore {
 		profile.generatedAt = null;
 		profile.generatedSignature = null;
 		this.notify('info', 'Mode week-end modifié : le planning doit être régénéré.');
+	}
+
+	/**
+	 * Holiday scope changes the slot categories but not their ids, so existing
+	 * assignments stay valid; the profile simply becomes stale until regenerated.
+	 */
+	setAlsaceMoselle(enabled: boolean): void {
+		const profile = this.active;
+		if (!profile || profile.settings.alsaceMoselle === enabled) return;
+		profile.settings.alsaceMoselle = enabled;
+		this.notify(
+			'info',
+			enabled
+				? 'Alsace-Moselle activé : Vendredi saint et Saint-Étienne ajoutés. Régénérez le planning pour rééquilibrer.'
+				: 'Alsace-Moselle désactivé : retour aux 11 jours fériés métropolitains. Régénérez le planning pour rééquilibrer.'
+		);
 	}
 
 	// -------------------------------------------------------------- physicians

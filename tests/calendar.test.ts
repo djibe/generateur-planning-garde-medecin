@@ -91,6 +91,26 @@ describe('buildSlots', () => {
 		}
 	});
 
+	it('adds the Alsace-Moselle holidays when requested', () => {
+		const slots = buildSlots(2026, 'split', { alsaceMoselle: true });
+		const byDate = new Map(slots.map((slot) => [slot.start, slot]));
+		const goodFriday = byDate.get('2026-04-03');
+		expect(goodFriday?.type).toBe('holiday');
+		expect(goodFriday?.tags.holiday).toBe(true);
+		expect(goodFriday?.tags.friday).toBe(true);
+		expect(goodFriday?.holidayName).toBe('Vendredi saint');
+		expect(byDate.get('2026-04-02')?.type).toBe('holidayEve'); // Jeudi saint
+	});
+
+	it('tags Saint Stephen in a combined weekend', () => {
+		// 26/12/2026 is a Saturday: the 26–27 block is also a holiday.
+		const slots = buildSlots(2026, 'combined', { alsaceMoselle: true });
+		const stephen = slots.find((slot) => slot.dates.includes('2026-12-26'));
+		expect(stephen?.isWeekendBlock).toBe(true);
+		expect(stephen?.type).toBe('holiday');
+		expect(stephen?.holidayName).toBe('Saint-Étienne');
+	});
+
 	it('groups slots by semester', () => {
 		const grouped = groupBySemester(buildSlots(2026, 'combined'));
 		expect(grouped.S1.length).toBeGreaterThan(0);

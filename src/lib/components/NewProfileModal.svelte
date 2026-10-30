@@ -9,12 +9,13 @@
 	let name = $state('');
 	let area = $state('');
 	let year = $state(currentYear);
+	let alsaceMoselle = $state(false);
 
 	const suggested = $derived(`${area.trim() || 'Mon secteur'} — ${year}`);
 
 	function submit(event: SubmitEvent) {
 		event.preventDefault();
-		app.createProfile({ name: name.trim() || suggested, area, year });
+		app.createProfile({ name: name.trim() || suggested, area, year, alsaceMoselle });
 		onclose();
 	}
 </script>
@@ -41,6 +42,21 @@
 			<label class="form-label" for="np-name">Nom du profil</label>
 			<input id="np-name" class="form-control" bind:value={name} placeholder={suggested} />
 			<div class="form-text">Sert à retrouver le planning dans la liste des profils.</div>
+		</div>
+		<div>
+			<div class="form-check">
+				<input
+					id="np-alsace"
+					class="form-check-input"
+					type="checkbox"
+					bind:checked={alsaceMoselle}
+				/>
+				<label class="form-check-label" for="np-alsace">Alsace-Moselle</label>
+			</div>
+			<div class="form-text">
+				Ajoute le Vendredi saint et la Saint-Étienne (26 décembre) aux 11 jours fériés
+				métropolitains.
+			</div>
 		</div>
 		<div class="d-flex justify-content-end gap-2 pt-1">
 			<button

@@ -14,6 +14,8 @@ aucune donnée envoyée sur Internet.
 ### 1. Médecins & répartition
 
 - Nom du profil et du secteur, année.
+- Option **Alsace-Moselle** à la création du profil (et modifiable dans les paramètres) : ajoute le
+  Vendredi saint et la Saint-Étienne (26 décembre) aux jours fériés.
 - Liste des médecins : nom, téléphone, ordre, plage d'absence unique (du / au).
 - Une colonne par jour (lundi–vendredi) combinant indisponibilité (max 4 jours) et préférence
   de garde (1 = jour préféré … 5 = moins préféré). Les jours fériés restent disponibles et les
@@ -65,7 +67,7 @@ aucune donnée envoyée sur Internet.
 | Règle                             | Détail                                                                                                |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Semestres                         | 01/01 → 30/06 (S1) et 01/07 → 31/12 (S2)                                                              |
-| Jours fériés                      | 11 fériés métropolitains, calculés (Pâques via Meeus/Jones/Butcher)                                   |
+| Jours fériés                      | 11 fériés métropolitains, ou 13 avec l'option Alsace-Moselle (Vendredi saint + Saint-Étienne)         |
 | Week-ends                         | Mode global par profil : **1 garde** (samedi + dimanche) ou **2 gardes** séparées                     |
 | Attribution                       | 1 praticien par garde ; tous les jours de l'année sont couverts                                       |
 | Équité                            | Priorité absolue : chaque catégorie est répartie aussi également que possible, absences déduites      |

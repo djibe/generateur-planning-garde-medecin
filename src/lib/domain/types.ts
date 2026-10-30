@@ -54,6 +54,8 @@ export interface Physician {
 
 export interface ProfileSettings {
 	weekendMode: WeekendMode;
+	/** Also observes Good Friday and Saint Stephen's Day (26 December). */
+	alsaceMoselle: boolean;
 }
 
 export interface Profile {

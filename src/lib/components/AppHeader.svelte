@@ -146,6 +146,9 @@
 						? 'Week-ends groupés (2 jours)'
 						: 'Week-ends séparés'}
 				</span>
+				{#if app.active.settings.alsaceMoselle}
+					<span><i class="bi bi-pin-map"></i>Alsace-Moselle</span>
+				{/if}
 				{#if app.generated}
 					<span
 						><i class="bi bi-clock-history"></i>Généré le {formatDateTime(
