@@ -15,6 +15,7 @@
 		label,
 		onSlotClick,
 		highlightId = null,
+		conflictIds = null,
 		monthFrom = 0,
 		monthTo = 11
 	}: {
@@ -23,6 +24,7 @@
 		label: (slot: Slot) => string | null;
 		onSlotClick?: (slot: Slot) => void;
 		highlightId?: string | null;
+		conflictIds?: Set<string> | null;
 		monthFrom?: number;
 		monthTo?: number;
 	} = $props();
@@ -90,6 +92,7 @@
 		if (slot.isWeekendBlock && slot.start === cell.date) parts.push('weekend-start');
 		if (slot.isWeekendBlock && slot.end === cell.date) parts.push('weekend-end');
 		if (highlightId && slot.id === highlightId) parts.push('is-pinned');
+		if (conflictIds?.has(slot.id)) parts.push('is-conflict');
 		if (cell.name === null) parts.push('muted');
 		return parts.join(' ');
 	}

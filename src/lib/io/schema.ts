@@ -17,6 +17,18 @@ const unavailabilitySchema = z.object({
 	reason: z.string().default('')
 });
 
+const weekdayRankSchema = z.number().int().min(1).max(5);
+
+const weekdayPreferencesSchema = z
+	.object({
+		lun: weekdayRankSchema.optional(),
+		mar: weekdayRankSchema.optional(),
+		mer: weekdayRankSchema.optional(),
+		jeu: weekdayRankSchema.optional(),
+		ven: weekdayRankSchema.optional()
+	})
+	.default({});
+
 const physicianSchema = z.object({
 	id: z.string(),
 	name: z.string().default(''),
@@ -25,6 +37,8 @@ const physicianSchema = z.object({
 	exemptFrom: z.string().nullable().default(null),
 	exemptTo: z.string().nullable().default(null),
 	unavailability: z.array(unavailabilitySchema).default([]),
+	unavailableWeekdays: z.array(z.enum(['lun', 'mar', 'mer', 'jeu', 'ven'])).default([]),
+	weekdayPreferences: weekdayPreferencesSchema,
 	targets: z.object({ S1: quotaSchema, S2: quotaSchema }),
 	sortOrder: z.number().int().default(0)
 });

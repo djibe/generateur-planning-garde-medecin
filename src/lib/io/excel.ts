@@ -2,6 +2,7 @@ import { slotLabel } from '#lib/domain/calendar.js';
 import { CATEGORIES, CATEGORY_LABELS, quotaTotal, quotaMismatches } from '#lib/domain/quotas.js';
 import { computeAllStats, targetDeviation } from '#lib/domain/stats.js';
 import type { Physician, Profile, SemesterId, Slot } from '#lib/domain/types.js';
+import { formatUnavailableWeekdays, formatWeekdayPreferences } from '#lib/domain/weekdays.js';
 import { formatLong, formatMedium } from '#lib/utils/date.js';
 import { downloadBlob, safeFileName } from '#lib/utils/download.js';
 
@@ -178,6 +179,8 @@ export async function exportPhysiciansWorkbook(profile: Profile, slots: Slot[]):
 				{ header: 'Nom', key: 'name', width: 30 },
 				{ header: 'Téléphone', key: 'phone', width: 18 },
 				{ header: 'Exempté', key: 'exempt', width: 10 },
+				{ header: 'Jours indisponibles', key: 'weekdays', width: 24 },
+				{ header: 'Jours préférés', key: 'preferences', width: 28 },
 				{ header: 'Du', key: 'from', width: 12 },
 				{ header: 'Au', key: 'to', width: 12 },
 				{ header: 'Absences', key: 'unavailability', width: 40 }
@@ -186,6 +189,8 @@ export async function exportPhysiciansWorkbook(profile: Profile, slots: Slot[]):
 				name: physician.name || 'Sans nom',
 				phone: physician.phone,
 				exempt: physician.exempt ? 'oui' : 'non',
+				weekdays: formatUnavailableWeekdays(physician) || '—',
+				preferences: formatWeekdayPreferences(physician) || '—',
 				from: physician.exemptFrom ? formatMedium(physician.exemptFrom) : '',
 				to: physician.exemptTo ? formatMedium(physician.exemptTo) : '',
 				unavailability: physician.unavailability
@@ -302,6 +307,8 @@ export async function exportDoctorWorkbook(
 	const summaryRows: Record<string, CellValue>[] = [
 		{ label: 'Médecin', value: physician.name || 'Sans nom' },
 		{ label: 'Téléphone', value: physician.phone },
+		{ label: 'Jours indisponibles', value: formatUnavailableWeekdays(physician) || '—' },
+		{ label: 'Jours préférés', value: formatWeekdayPreferences(physician) || '—' },
 		{ label: 'Secteur', value: profile.area || profile.name },
 		{ label: 'Année', value: profile.year },
 		{ label: 'Jours de garde', value: stats?.year.days ?? 0 },

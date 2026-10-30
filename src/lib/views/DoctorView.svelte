@@ -3,6 +3,7 @@
 	import YearCalendar from '#lib/components/YearCalendar.svelte';
 	import { CATEGORIES, CATEGORY_LABELS, emptyQuota } from '#lib/domain/quotas.js';
 	import type { SemesterId, Slot } from '#lib/domain/types.js';
+	import { formatUnavailableWeekdays, formatWeekdayPreferences } from '#lib/domain/weekdays.js';
 	import { exportDoctorWorkbook } from '#lib/io/excel.js';
 	import { app } from '#lib/stores/app.svelte.js';
 	import { formatLong, formatMedium } from '#lib/utils/date.js';
@@ -20,6 +21,7 @@
 	});
 
 	const doctorStats = $derived(doctor ? (app.statsById.get(doctor.id) ?? null) : null);
+	const preferenceSummary = $derived(doctor ? formatWeekdayPreferences(doctor) : '');
 
 	const doctorSlots = $derived.by(() => {
 		if (!doctor) return [] as Slot[];
@@ -125,6 +127,20 @@
 					{#if doctor.exempt}
 						<i class="bi bi-slash-circle me-1"></i>
 						{doctor.exemptFrom || doctor.exemptTo ? 'Exemption partielle' : 'Exempté toute l’année'}
+					{/if}
+					{#if doctor.unavailableWeekdays?.length}
+						{#if doctor.phone || doctor.exempt}
+							·
+						{/if}
+						<i class="bi bi-calendar-x me-1"></i>
+						Indispo. {formatUnavailableWeekdays(doctor)}
+					{/if}
+					{#if preferenceSummary}
+						{#if doctor.phone || doctor.exempt || doctor.unavailableWeekdays?.length}
+							·
+						{/if}
+						<i class="bi bi-star me-1"></i>
+						Préf. {preferenceSummary}
 					{/if}
 				</div>
 			</div>

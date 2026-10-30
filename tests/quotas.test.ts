@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
 	CATEGORIES,
+	adjustTargets,
+	averageTargets,
 	capacityByCategory,
 	emptyQuota,
 	evenSplit,
@@ -75,5 +77,68 @@ describe('capacity and targets', () => {
 		const mismatches = quotaMismatches([physician], [slot({ weekday: 1 })]);
 		expect(mismatches.some((mismatch) => mismatch.category === 'weekday')).toBe(true);
 		expect(mismatches.find((mismatch) => mismatch.category === 'weekday')?.capacity).toBe(1);
+	});
+});
+
+function datedSlot(
+	iso: string,
+	type: Slot['type'],
+	weights: Partial<Record<(typeof CATEGORIES)[number], number>>
+): Slot {
+	return {
+		id: `S1:${iso}`,
+		semester: 'S1',
+		start: iso,
+		end: iso,
+		dates: [iso],
+		type,
+		weights: { ...emptyQuota(), ...weights },
+		tags: {
+			weekday: false,
+			friday: false,
+			saturday: false,
+			sunday: false,
+			holidayEve: false,
+			holiday: false
+		},
+		isWeekendBlock: false,
+		holidayName: null
+	};
+}
+
+describe('targets and weekday restrictions', () => {
+	const slots = [
+		datedSlot('2026-05-04', 'weekday', { weekday: 1 }),
+		datedSlot('2026-05-15', 'friday', { friday: 1 }),
+		datedSlot('2026-05-02', 'saturday', { saturday: 1 })
+	];
+
+	it('gives no target in a category the physician can never work', () => {
+		const free = createPhysician(1, 'Libre');
+		const noFriday = createPhysician(2, 'Sans vendredi', '', false, ['ven']);
+		averageTargets([free, noFriday], 'S1', capacityByCategory(slots, 'S1'), slots);
+		expect(noFriday.targets.S1.friday).toBe(0);
+		expect(free.targets.S1.friday).toBe(1);
+		expect(noFriday.targets.S1.weekday + free.targets.S1.weekday).toBe(1);
+		expect(noFriday.targets.S1.saturday + free.targets.S1.saturday).toBe(1);
+	});
+
+	it('zeroes the impossible target when adjusting existing values', () => {
+		const free = createPhysician(1, 'Libre');
+		free.targets.S1.friday = 2;
+		const noFriday = createPhysician(2, 'Sans vendredi', '', false, ['ven']);
+		noFriday.targets.S1.friday = 5;
+		const fridayOnly = [datedSlot('2026-05-15', 'friday', { friday: 3 })];
+		adjustTargets([free, noFriday], 'S1', capacityByCategory(fridayOnly, 'S1'), fridayOnly);
+		expect(noFriday.targets.S1.friday).toBe(0);
+		expect(free.targets.S1.friday).toBe(3);
+	});
+
+	it('keeps every category when no weekday is restricted', () => {
+		const free = createPhysician(1, 'Libre');
+		averageTargets([free], 'S1', capacityByCategory(slots, 'S1'), slots);
+		expect(free.targets.S1.weekday).toBe(1);
+		expect(free.targets.S1.friday).toBe(1);
+		expect(free.targets.S1.saturday).toBe(1);
 	});
 });

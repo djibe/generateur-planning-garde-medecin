@@ -1,6 +1,6 @@
 import { emptyQuota } from './quotas';
 import { randomSeed } from './rng';
-import type { Physician, Profile, ProfileSummary } from './types';
+import type { Physician, Profile, ProfileSummary, Weekday, WeekdayRank } from './types';
 
 export function uid(prefix = 'id'): string {
 	const cryptoApi = globalThis.crypto;
@@ -14,7 +14,9 @@ export function createPhysician(
 	sortOrder: number,
 	name = '',
 	phone = '',
-	exempt = false
+	exempt = false,
+	unavailableWeekdays: Weekday[] = [],
+	weekdayPreferences: Partial<Record<Weekday, WeekdayRank>> = {}
 ): Physician {
 	return {
 		id: uid('phy'),
@@ -24,6 +26,8 @@ export function createPhysician(
 		exemptFrom: null,
 		exemptTo: null,
 		unavailability: [],
+		unavailableWeekdays: [...unavailableWeekdays],
+		weekdayPreferences: { ...weekdayPreferences },
 		targets: { S1: emptyQuota(), S2: emptyQuota() },
 		sortOrder
 	};
@@ -82,6 +86,12 @@ export function inputSignature(profile: Profile): string {
 				from: physician.exemptFrom,
 				to: physician.exemptTo,
 				unavailable: physician.unavailability.map((range) => [range.from, range.to]),
+				unavailableWeekdays: [...(physician.unavailableWeekdays ?? [])].sort(),
+				weekdayPreferences: Object.fromEntries(
+					Object.entries(physician.weekdayPreferences ?? {}).sort(([left], [right]) =>
+						left.localeCompare(right)
+					)
+				),
 				targets: physician.targets
 			}))
 	});

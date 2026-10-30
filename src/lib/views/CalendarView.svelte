@@ -3,6 +3,7 @@
 	import TypeBadge from '#lib/components/TypeBadge.svelte';
 	import YearCalendar from '#lib/components/YearCalendar.svelte';
 	import { CATEGORIES } from '#lib/domain/quotas.js';
+	import { isAvailable } from '#lib/domain/generator.js';
 	import type { SemesterId, Slot } from '#lib/domain/types.js';
 	import { exportPlanningWorkbook } from '#lib/io/excel.js';
 	import { app } from '#lib/stores/app.svelte.js';
@@ -23,6 +24,16 @@
 			.sort((left, right) => left.start.localeCompare(right.start))
 	);
 	const swapCount = $derived(slots.filter((slot) => app.assignmentOf(slot)).length);
+	const conflictIds = $derived.by(() => {
+		const conflicts = new Set<string>();
+		for (const slot of slots) {
+			const physicianId = app.assignmentOf(slot);
+			if (!physicianId) continue;
+			const physician = app.physicianMap.get(physicianId);
+			if (physician && !isAvailable(physician, slot)) conflicts.add(slot.id);
+		}
+		return conflicts;
+	});
 
 	function onAssign(slot: Slot, event: Event) {
 		const select = event.currentTarget as HTMLSelectElement;
@@ -144,6 +155,16 @@
 		</span>
 	</div>
 
+	{#if conflictIds.size}
+		<div class="alert alert-warning d-flex align-items-center gap-2 py-2 small">
+			<i class="bi bi-exclamation-triangle-fill"></i>
+			<span>
+				{conflictIds.size} garde(s) attribuée(s) à un médecin désormais indisponible. Elles sont surlignées
+				: régénérez le planning ou échangez-les.
+			</span>
+		</div>
+	{/if}
+
 	{#if mode === 'calendar'}
 		<YearCalendar
 			year={profile.year}
@@ -151,6 +172,7 @@
 			{label}
 			onSlotClick={(slot) => (swapSlotId = slot.id)}
 			highlightId={null}
+			{conflictIds}
 			monthFrom={semester === 'S1' ? 0 : 6}
 			monthTo={semester === 'S1' ? 5 : 11}
 		/>
@@ -173,7 +195,7 @@
 							{#each slots as slot (slot.id)}
 								{@const assignment = app.assignmentOf(slot)}
 								{@const pinned = !!profile.pins[slot.id]}
-								<tr>
+								<tr class:row-conflict={conflictIds.has(slot.id)}>
 									<td class="text-nowrap">
 										<div class="fw-medium">{formatMedium(slot.start)}</div>
 										{#if slot.isWeekendBlock}
@@ -183,6 +205,12 @@
 									<td><TypeBadge type={slot.type} weekend={slot.isWeekendBlock} /></td>
 									<td class="small text-secondary">{slot.holidayName ?? '—'}</td>
 									<td>
+										{#if conflictIds.has(slot.id)}
+											<i
+												class="bi bi-exclamation-triangle-fill text-warning me-1"
+												title="Ce médecin est désormais indisponible à cette date"
+											></i>
+										{/if}
 										<select
 											class="form-select form-select-sm"
 											value={assignment ?? ''}

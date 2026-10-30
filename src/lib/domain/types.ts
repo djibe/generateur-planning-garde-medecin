@@ -4,6 +4,12 @@ export type SemesterId = 'S1' | 'S2';
 
 export type WeekendMode = 'combined' | 'split';
 
+/** Weekdays that can be declared unavailable. Weekends are handled by the weekend mode. */
+export type Weekday = 'lun' | 'mar' | 'mer' | 'jeu' | 'ven';
+
+/** Preference rank for a weekday: 1 = most preferred, 5 = least preferred. */
+export type WeekdayRank = 1 | 2 | 3 | 4 | 5;
+
 /** Categories used for both targets and reports. */
 export type Category = 'weekday' | 'friday' | 'saturday' | 'sunday' | 'holidayEve' | 'holiday';
 
@@ -47,6 +53,10 @@ export interface Physician {
 	exemptFrom: ISODate | null;
 	exemptTo: ISODate | null;
 	unavailability: Unavailability[];
+	/** Year-round pattern: these weekdays are never assigned, except on public holidays. */
+	unavailableWeekdays: Weekday[];
+	/** Optional Monday–Friday preference ranking. Missing day = neutral. */
+	weekdayPreferences: Partial<Record<Weekday, WeekdayRank>>;
 	targets: Record<SemesterId, Quota>;
 	sortOrder: number;
 }

@@ -349,6 +349,17 @@ h6,
 	opacity: 0.68;
 }
 
+.weekday-select {
+	min-width: 4.6rem;
+	padding-top: 0.18rem;
+	padding-bottom: 0.18rem;
+	font-size: 0.78rem;
+}
+
+tr.row-conflict td {
+	background: color-mix(in srgb, var(--bs-warning) 14%, transparent);
+}
+
 .quota-input {
 	width: 3.9rem;
 	text-align: center;
@@ -542,6 +553,10 @@ h6,
 	height: 4px;
 	border-radius: 50%;
 	background: var(--bs-primary);
+}
+
+.day.is-conflict {
+	box-shadow: inset 0 0 0 2px var(--bs-warning);
 }
 
 .day.weekend-start {

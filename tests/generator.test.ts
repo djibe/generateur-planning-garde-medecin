@@ -4,6 +4,7 @@ import { createPhysician } from '#lib/domain/factory.js';
 import { generateSchedule, isAvailable } from '#lib/domain/generator.js';
 import { CATEGORIES, averageTargets, capacityByCategory } from '#lib/domain/quotas.js';
 import { computeAllStats } from '#lib/domain/stats.js';
+import { weekdayIndex } from '#lib/utils/date.js';
 import type { Profile, WeekendMode } from '#lib/domain/types.js';
 
 function makeProfile(count = 12, mode: WeekendMode = 'combined'): Profile {
@@ -135,6 +136,50 @@ describe('generateSchedule', () => {
 		}
 	});
 
+	it('never assigns a physician on their unavailable weekdays', () => {
+		const profile = makeProfile();
+		const physician = profile.physicians[1];
+		physician.unavailableWeekdays = ['mer'];
+		const slots = buildSlots(2026, 'combined');
+		const result = generateSchedule({ physicians: profile.physicians, slots, pins: {}, seed: 13 });
+		for (const [slotId, physicianId] of Object.entries(result.assignments)) {
+			if (physicianId !== physician.id) continue;
+			const slot = slots.find((entry) => entry.id === slotId);
+			expect(
+				slot?.dates.some((date) => weekdayIndex(date) === 2 && !slot.tags.holiday)
+			).toBeFalsy();
+		}
+	});
+
+	it('favours preferred weekdays when targets allow it', () => {
+		const allSlots = buildSlots(2026, 'split');
+		const mondays = allSlots
+			.filter((slot) => weekdayIndex(slot.start) === 0 && !slot.tags.holiday)
+			.slice(0, 8);
+		const tuesdays = allSlots
+			.filter((slot) => weekdayIndex(slot.start) === 1 && !slot.tags.holiday)
+			.slice(0, 8);
+		const slots = [...mondays, ...tuesdays].sort((left, right) =>
+			left.start.localeCompare(right.start)
+		);
+		const mondayLover = createPhysician(1, 'Lundi', '', false, [], { lun: 1 });
+		const tuesdayLover = createPhysician(2, 'Mardi', '', false, [], { mar: 1 });
+		const result = generateSchedule({
+			physicians: [mondayLover, tuesdayLover],
+			slots,
+			pins: {},
+			seed: 3,
+			iterationsPerSemester: 5000
+		});
+		const mondayForFirst = mondays.filter(
+			(slot) => result.assignments[slot.id] === mondayLover.id
+		).length;
+		const mondayForSecond = mondays.filter(
+			(slot) => result.assignments[slot.id] === tuesdayLover.id
+		).length;
+		expect(mondayForFirst).toBeGreaterThan(mondayForSecond);
+	});
+
 	it('returns warnings when nobody is available', () => {
 		const profile = makeProfile(2);
 		for (const physician of profile.physicians) physician.exempt = true;
@@ -170,5 +215,44 @@ describe('isAvailable', () => {
 		physician.exemptTo = '2026-06-30';
 		const slot = buildSlots(2026, 'split').find((entry) => entry.start === '2026-03-04');
 		expect(isAvailable(physician, slot!)).toBe(false);
+	});
+
+	it('rejects a weekday declared unavailable', () => {
+		const physician = createPhysician(1, 'A');
+		physician.unavailableWeekdays = ['lun'];
+		const monday = buildSlots(2026, 'split').find((entry) => entry.start === '2026-05-04');
+		const tuesday = buildSlots(2026, 'split').find((entry) => entry.start === '2026-05-05');
+		expect(isAvailable(physician, monday!)).toBe(false);
+		expect(isAvailable(physician, tuesday!)).toBe(true);
+	});
+
+	it('never blocks Saturday, Sunday or combined weekends', () => {
+		const physician = createPhysician(1, 'A');
+		physician.unavailableWeekdays = ['lun', 'mar', 'mer', 'jeu', 'ven'];
+		const saturday = buildSlots(2026, 'split').find((entry) => entry.start === '2026-05-02');
+		const sunday = buildSlots(2026, 'split').find((entry) => entry.start === '2026-05-03');
+		const weekend = buildSlots(2026, 'combined').find((entry) => entry.start === '2026-05-02');
+		expect(isAvailable(physician, saturday!)).toBe(true);
+		expect(isAvailable(physician, sunday!)).toBe(true);
+		expect(isAvailable(physician, weekend!)).toBe(true);
+	});
+
+	it('lets public holidays override the weekday rule', () => {
+		const physician = createPhysician(1, 'A');
+		physician.unavailableWeekdays = ['ven', 'lun'];
+		const fridayHoliday = buildSlots(2026, 'split').find((entry) => entry.start === '2026-05-01');
+		const mondayHoliday = buildSlots(2026, 'split').find((entry) => entry.start === '2026-04-06');
+		expect(fridayHoliday?.tags.holiday).toBe(true);
+		expect(mondayHoliday?.tags.holiday).toBe(true);
+		expect(isAvailable(physician, fridayHoliday!)).toBe(true);
+		expect(isAvailable(physician, mondayHoliday!)).toBe(true);
+	});
+
+	it('still blocks a holiday eve falling on an unavailable weekday', () => {
+		const physician = createPhysician(1, 'A');
+		physician.unavailableWeekdays = ['jeu'];
+		const eve = buildSlots(2026, 'split').find((entry) => entry.start === '2026-05-07');
+		expect(eve?.tags.holidayEve).toBe(true);
+		expect(isAvailable(physician, eve!)).toBe(false);
 	});
 });

@@ -2,6 +2,11 @@ import { diffDays } from '../utils/date';
 import { mulberry32 } from './rng';
 import { CATEGORIES, capacityByCategory, emptyQuota, evenSplit, isFullyExempt } from './quotas';
 import type { Category, Physician, Quota, SemesterId, Slot } from './types';
+import {
+	isSlotBlockedByWeekdays,
+	weekdayPossibleCategories,
+	weekdayPreferenceCost
+} from './weekdays';
 
 export interface GenerateOptions {
 	physicians: Physician[];
@@ -32,6 +37,7 @@ function slotRank(slot: Slot): number {
 }
 
 export function isAvailable(physician: Physician, slot: Slot): boolean {
+	if (isSlotBlockedByWeekdays(physician, slot)) return false;
 	if (physician.exempt && (physician.exemptFrom || physician.exemptTo)) {
 		for (const date of slot.dates) {
 			const afterStart = !physician.exemptFrom || date >= physician.exemptFrom;
@@ -54,18 +60,22 @@ function buildTargets(
 ): Map<string, Quota> {
 	const capacity = capacityByCategory(slots);
 	const targets = new Map<string, Quota>();
+	const possible = new Map<string, Set<Category>>();
 	for (const physician of physicians) {
 		targets.set(physician.id, { ...emptyQuota(), ...physician.targets[semester] });
+		possible.set(physician.id, weekdayPossibleCategories(physician, slots, semester));
 	}
 	for (const category of CATEGORIES) {
 		if (capacity[category] === 0) continue;
-		const total = physicians.reduce(
+		const eligible = physicians.filter((physician) => possible.get(physician.id)?.has(category));
+		if (!eligible.length) continue;
+		const total = eligible.reduce(
 			(acc, physician) => acc + (targets.get(physician.id)?.[category] ?? 0),
 			0
 		);
 		if (total === 0) {
-			const split = evenSplit(capacity[category], physicians.length);
-			physicians.forEach((physician, index) => {
+			const split = evenSplit(capacity[category], eligible.length);
+			eligible.forEach((physician, index) => {
 				const target = targets.get(physician.id);
 				if (target) target[category] = split[index] ?? 0;
 			});
@@ -95,7 +105,9 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 		return {
 			assignments,
 			unassigned: slots.map((slot) => slot.id),
-			warnings: ['Aucun médecin disponible : vérifiez les exemptions et les absences.'],
+			warnings: [
+				'Aucun médecin disponible : vérifiez les exemptions, les absences et les jours indisponibles.'
+			],
 			iterations: 0
 		};
 	}
@@ -111,6 +123,7 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 		if (!semesterSlots.length) continue;
 
 		const targets = buildTargets(active, semester, semesterSlots);
+		const physiciansById = new Map(active.map((physician) => [physician.id, physician]));
 
 		const eligible = new Map<string, string[]>();
 		for (const slot of semesterSlots) {
@@ -126,11 +139,13 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 		const assignedSets = new Map<string, Set<string>>();
 		const assignedLists = new Map<string, Slot[]>();
 		const spacingCosts = new Map<string, number>();
+		const preferenceCosts = new Map<string, number>();
 		for (const physician of active) {
 			counts.set(physician.id, emptyQuota());
 			assignedSets.set(physician.id, new Set<string>());
 			assignedLists.set(physician.id, []);
 			spacingCosts.set(physician.id, 0);
+			preferenceCosts.set(physician.id, 0);
 		}
 
 		const gapCost = (left: Slot | undefined, right: Slot | undefined): number => {
@@ -170,6 +185,13 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 					gapCost(previous, slot) +
 					gapCost(slot, next)
 			);
+			const physician = physiciansById.get(physicianId);
+			if (physician) {
+				preferenceCosts.set(
+					physicianId,
+					(preferenceCosts.get(physicianId) ?? 0) + weekdayPreferenceCost(physician, slot)
+				);
+			}
 			list.splice(index, 0, slot);
 		};
 
@@ -194,6 +216,13 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 					gapCost(slot, next) +
 					gapCost(previous, next)
 			);
+			const physician = physiciansById.get(physicianId);
+			if (physician) {
+				preferenceCosts.set(
+					physicianId,
+					(preferenceCosts.get(physicianId) ?? 0) - weekdayPreferenceCost(physician, slot)
+				);
+			}
 			list.splice(index, 1);
 		};
 
@@ -202,6 +231,7 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 			const target = targets.get(physicianId);
 			if (!count || !target) return 0;
 			let cost = spacingCosts.get(physicianId) ?? 0;
+			cost += preferenceCosts.get(physicianId) ?? 0;
 			for (const category of CATEGORIES) {
 				cost += Math.abs(count[category] - target[category]) * 100;
 			}
@@ -242,7 +272,9 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 				const spacing = spacingCosts.get(physicianId) ?? 0;
 				removeSlot(physicianId, slot);
 
-				const score = need * 100 - spacing + random() * 1.5;
+				const physician = physiciansById.get(physicianId);
+				const preference = physician ? weekdayPreferenceCost(physician, slot) : 0;
+				const score = need * 100 - spacing - preference + random() * 1.5;
 				if (score > bestScore) {
 					bestScore = score;
 					best = physicianId;
@@ -340,7 +372,7 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 
 	if (noCandidateCount > 0) {
 		warnings.push(
-			`${noCandidateCount} créneau(x) n'ont aucun médecin disponible (exemptions ou absences).`
+			`${noCandidateCount} créneau(x) n'ont aucun médecin disponible (exemptions, absences ou jours indisponibles).`
 		);
 	}
 	if (unassigned.length > 0) {

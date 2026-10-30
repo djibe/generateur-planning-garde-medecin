@@ -15,7 +15,12 @@ aucune donnée envoyée sur Internet.
 
 - Nom du profil et du secteur, année.
 - Liste des médecins : nom, téléphone, ordre, exemption, absences.
-- Import CSV (`Nom;Téléphone;Exempté`), ajout/suppression, réordonnancement.
+- Une colonne par jour (lundi–vendredi) combinant indisponibilité (max 4 jours) et préférence
+  de garde (1 = jour préféré … 5 = moins préféré). Les jours fériés restent disponibles et les
+  week-ends ne sont pas concernés.
+- Le générateur privilégie les jours préférés sans sacrifier les objectifs ni l'espacement.
+- Import CSV (`Nom;Téléphone;Exempté;Jours indisponibles;Jours préférés`), ajout/suppression,
+  réordonnancement.
 - Objectifs **par semestre** et par catégorie : semaine, vendredi, samedi, dimanche,
   veille de férié, jour férié.
 - Boutons « Répartition équitable » (calcule des objectifs au prorata des créneaux) et
@@ -101,13 +106,31 @@ npm run dev        # http://localhost:5173
 ## Format CSV
 
 Une ligne par médecin, séparateur `;` (ou `,` / tabulation, détection automatique).
-L'en-tête est optionnel. Les colonnes `Téléphone` et `Exempté` sont optionnelles.
+L'en-tête est optionnel. Les colonnes `Téléphone`, `Exempté`, `Jours indisponibles` et
+`Jours préférés` sont optionnelles ; sans en-tête, la 4e colonne contient les jours
+indisponibles et la 5e les préférences.
 
 ```csv
-Nom;Téléphone;Exempté
-Dr Alice Martin;06 12 34 56 78;non
-Dr Benoît Petit;06 98 76 54 32;oui
+Nom;Téléphone;Exempté;Jours indisponibles;Jours préférés
+Dr Alice Martin;06 12 34 56 78;non;lun,mer;mar=1,jeu=2
+Dr Benoît Petit;06 98 76 54 32;oui;;ven=1
+Dr Chloé Durand;06 11 22 33 44;non;ven;lun=1,mer=3
 ```
+
+Le motif de jours indisponibles est annuel et ne concerne que **lundi à vendredi**.
+Les jours fériés restent disponibles (ils annulent la règle hebdomadaire), mais pas les
+veilles de férié. Les codes acceptés sont strictement `lun`, `mar`, `mer`, `jeu`, `ven`,
+séparés par une virgule, un point-virgule, une barre oblique, une barre verticale ou des
+espaces. Au maximum **4 jours indisponibles** par médecin.
+
+Les préférences s'écrivent en paires `jour=rang` : `lun=1,mer=3`. Le rang va de **1 (jour
+préféré) à 5 (jour le moins préféré)**. Les rangs doivent être uniques, portent uniquement
+sur un jour disponible, et un classement partiel est accepté (les jours non renseignés sont
+neutres). En cas de doublon, le premier jour (ordre lundi→vendredi) est conservé.
+
+Les valeurs inconnues (`sam`, `dim`, `lundi`, rang hors 1–5, préférence sur un jour
+indisponible, 5e jour indisponible…) sont ignorées et signalées dans l'aperçu d'import :
+les valeurs valides de la ligne sont conservées.
 
 Les valeurs reconnues pour l'exemption sont `oui`/`non`, `true`/`false`, `1`/`0`.
 Les guillemets sont gérés (`"Dr; A"`). Un BOM UTF-8 est ignoré.

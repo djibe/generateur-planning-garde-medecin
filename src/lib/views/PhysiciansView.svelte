@@ -12,10 +12,15 @@
 		quotaTotal,
 		targetsByCategory
 	} from '#lib/domain/quotas.js';
-	import type { Category, Physician, SemesterId } from '#lib/domain/types.js';
+	import type { Category, Physician, SemesterId, Weekday, WeekdayRank } from '#lib/domain/types.js';
+	import {
+		MAX_UNAVAILABLE_WEEKDAYS,
+		WEEKDAYS,
+		WEEKDAY_LABELS,
+		WEEKDAY_RANKS
+	} from '#lib/domain/weekdays.js';
 	import { exportPhysiciansWorkbook } from '#lib/io/excel.js';
 	import { app } from '#lib/stores/app.svelte.js';
-	import { formatMedium } from '#lib/utils/date.js';
 
 	let semester = $state<SemesterId>('S1');
 	let csvOpen = $state(false);
@@ -39,27 +44,20 @@
 		app.setTarget(semester, physician.id, category, value);
 	}
 
-	function constraintLabel(physician: Physician): string {
-		const parts: string[] = [];
-		if (isFullyExempt(physician)) {
-			parts.push('Exempté toute l’année');
-		} else if (physician.exempt) {
-			if (physician.exemptFrom && physician.exemptTo) {
-				parts.push(
-					`Exempté du ${formatMedium(physician.exemptFrom)} au ${formatMedium(physician.exemptTo)}`
-				);
-			} else if (physician.exemptFrom) {
-				parts.push(`Exempté à partir du ${formatMedium(physician.exemptFrom)}`);
-			} else if (physician.exemptTo) {
-				parts.push(`Exempté jusqu’au ${formatMedium(physician.exemptTo)}`);
-			}
-		}
-		if (physician.unavailability.length) {
-			parts.push(
-				`${physician.unavailability.length} absence${physician.unavailability.length > 1 ? 's' : ''}`
-			);
-		}
-		return parts.join(' · ');
+	function weekdayValue(physician: Physician, day: Weekday): string {
+		if (physician.unavailableWeekdays?.includes(day)) return 'off';
+		const rank = physician.weekdayPreferences?.[day];
+		return rank === undefined ? '' : String(rank);
+	}
+
+	function onWeekdayChange(physician: Physician, day: Weekday, event: Event) {
+		const select = event.currentTarget as HTMLSelectElement;
+		const raw = select.value;
+		let accepted = true;
+		if (raw === 'off') accepted = app.setWeekdayStatus(physician.id, day, 'off');
+		else if (raw === '') accepted = app.setWeekdayStatus(physician.id, day, null);
+		else accepted = app.setWeekdayStatus(physician.id, day, Number(raw) as WeekdayRank);
+		if (!accepted) select.value = weekdayValue(physician, day);
 	}
 
 	async function exportExcel() {
@@ -180,7 +178,8 @@
 					<div class="icon"><i class="bi bi-person-plus"></i></div>
 					<h3>Ajoutez votre premier médecin</h3>
 					<p class="mb-2">
-						Saisissez les noms et téléphones, ou importez un fichier <code>Nom;Téléphone</code>.
+						Saisissez les noms et téléphones, ou importez un fichier
+						<code>Nom;Téléphone;Jours…</code>.
 					</p>
 					<div class="d-flex gap-2">
 						<button type="button" class="btn btn-primary btn-sm" onclick={() => app.addPhysician()}>
@@ -204,7 +203,15 @@
 								<th>Nom</th>
 								<th>Téléphone</th>
 								<th style="width: 6rem">Exempté</th>
-								<th>Contraintes</th>
+								{#each WEEKDAYS as day (day)}
+									<th
+										style="width: 5.4rem"
+										class="text-center"
+										title={`Indisponibilité ou préférence du ${WEEKDAY_LABELS[day].toLowerCase()}`}
+									>
+										{WEEKDAY_LABELS[day].slice(0, 3)}
+									</th>
+								{/each}
 								<th style="width: 7.5rem" class="text-end">Actions</th>
 							</tr>
 						</thead>
@@ -240,6 +247,12 @@
 											aria-label="Nom du médecin"
 											oninput={(event) => (physician.name = event.currentTarget.value)}
 										/>
+										{#if (physician.unavailableWeekdays?.length ?? 0) > MAX_UNAVAILABLE_WEEKDAYS}
+											<i
+												class="bi bi-exclamation-triangle-fill text-warning ms-1"
+												title="Maximum 4 jours indisponibles : rendez au moins un jour disponible."
+											></i>
+										{/if}
 									</td>
 									<td>
 										<input
@@ -264,9 +277,22 @@
 											</label>
 										</div>
 									</td>
-									<td class="small text-secondary">
-										{constraintLabel(physician) || '—'}
-									</td>
+									{#each WEEKDAYS as day (day)}
+										<td class="text-center">
+											<select
+												class="form-select form-select-sm weekday-select"
+												value={weekdayValue(physician, day)}
+												aria-label={`${WEEKDAY_LABELS[day]} — ${physician.name || 'sans nom'}`}
+												onchange={(event) => onWeekdayChange(physician, day, event)}
+											>
+												<option value="">—</option>
+												<option value="off">Indispo</option>
+												{#each WEEKDAY_RANKS as rank (rank)}
+													<option value={String(rank)}>{rank}</option>
+												{/each}
+											</select>
+										</td>
+									{/each}
 									<td class="text-end text-nowrap">
 										<button
 											type="button"
@@ -289,6 +315,11 @@
 							{/each}
 						</tbody>
 					</table>
+				</div>
+				<div class="form-text px-1">
+					Chaque jour : <strong>—</strong> disponible sans préférence, <strong>Indispo</strong>
+					jamais ce jour (maximum 4 jours), <strong>1</strong> jour préféré … <strong>5</strong> moins
+					préféré. Les jours fériés restent disponibles.
 				</div>
 			{/if}
 		</div>

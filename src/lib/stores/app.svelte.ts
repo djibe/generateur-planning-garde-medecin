@@ -16,6 +16,11 @@ import {
 	quotaMismatches
 } from '#lib/domain/quotas.js';
 import { computeAllStats } from '#lib/domain/stats.js';
+import {
+	WEEKDAYS,
+	canMakeWeekdayUnavailable,
+	nextWeekdayPreferences
+} from '#lib/domain/weekdays.js';
 import type {
 	Category,
 	Physician,
@@ -24,6 +29,8 @@ import type {
 	SemesterId,
 	Slot,
 	Unavailability,
+	Weekday,
+	WeekdayRank,
 	WeekendMode
 } from '#lib/domain/types.js';
 import type { CsvPhysician } from '#lib/io/csv.js';
@@ -314,6 +321,42 @@ class AppStore {
 		physician.unavailability = physician.unavailability.filter((range) => range.id !== rangeId);
 	}
 
+	/**
+	 * `off` marks the weekday unavailable, a rank sets a preference, null clears both.
+	 * Returns false when the 4-unavailable-days limit blocks the change.
+	 */
+	setWeekdayStatus(physicianId: string, day: Weekday, value: 'off' | WeekdayRank | null): boolean {
+		const physician = this.physicianMap.get(physicianId);
+		if (!physician) return false;
+		const unavailable = new Set(physician.unavailableWeekdays ?? []);
+
+		if (value === 'off') {
+			if (!canMakeWeekdayUnavailable(physician, day)) {
+				this.notify(
+					'danger',
+					'Maximum 4 jours indisponibles par médecin : au moins un jour de la semaine doit rester disponible.'
+				);
+				return false;
+			}
+			unavailable.add(day);
+			physician.unavailableWeekdays = WEEKDAYS.filter((entry) => unavailable.has(entry));
+			const preferences = { ...(physician.weekdayPreferences ?? {}) };
+			delete preferences[day];
+			physician.weekdayPreferences = preferences;
+			return true;
+		}
+
+		if (unavailable.delete(day)) {
+			physician.unavailableWeekdays = WEEKDAYS.filter((entry) => unavailable.has(entry));
+		}
+		physician.weekdayPreferences = nextWeekdayPreferences(
+			physician.weekdayPreferences ?? {},
+			day,
+			value
+		);
+		return true;
+	}
+
 	setTarget(semester: SemesterId, physicianId: string, category: Category, value: number): void {
 		const physician = this.physicianMap.get(physicianId);
 		if (!physician) return;
@@ -324,14 +367,24 @@ class AppStore {
 	applyAverageTargets(semester: SemesterId): void {
 		const profile = this.active;
 		if (!profile) return;
-		averageTargets(profile.physicians, semester, capacityByCategory(this.slots, semester));
+		averageTargets(
+			profile.physicians,
+			semester,
+			capacityByCategory(this.slots, semester),
+			this.slots
+		);
 		this.notify('success', `Objectifs ${semester} répartis équitablement.`);
 	}
 
 	adjustTargetsToCapacity(semester: SemesterId): void {
 		const profile = this.active;
 		if (!profile) return;
-		adjustTargets(profile.physicians, semester, capacityByCategory(this.slots, semester));
+		adjustTargets(
+			profile.physicians,
+			semester,
+			capacityByCategory(this.slots, semester),
+			this.slots
+		);
 		this.notify('success', `Objectifs ${semester} ajustés aux créneaux disponibles.`);
 	}
 
@@ -349,7 +402,16 @@ class AppStore {
 		);
 		for (const row of rows) {
 			order += 1;
-			profile.physicians.push(createPhysician(order, row.name, row.phone, row.exempt));
+			profile.physicians.push(
+				createPhysician(
+					order,
+					row.name,
+					row.phone,
+					row.exempt,
+					row.unavailableWeekdays,
+					row.weekdayPreferences
+				)
+			);
 		}
 		this.notify('success', `${rows.length} médecin(s) importé(s).`);
 	}

@@ -1,4 +1,5 @@
 import type { Category, Physician, Quota, SemesterId, ShiftTags, Slot } from './types';
+import { weekdayPossibleCategories } from './weekdays';
 
 export const CATEGORIES: Category[] = [
 	'weekday',
@@ -127,17 +128,34 @@ export function normalizeToTotal(values: number[], total: number): number[] {
 export function averageTargets(
 	physicians: Physician[],
 	semester: SemesterId,
-	capacity: Quota
+	capacity: Quota,
+	slots: Slot[] = []
 ): void {
 	const active = activePhysicians(physicians);
+	const possible = new Map<string, Set<Category>>();
+	for (const physician of physicians) {
+		possible.set(
+			physician.id,
+			slots.length ? weekdayPossibleCategories(physician, slots, semester) : new Set(CATEGORIES)
+		);
+	}
 	for (const physician of physicians) {
 		if (isFullyExempt(physician)) {
 			physician.targets[semester] = emptyQuota();
+			continue;
+		}
+		if (slots.length) {
+			for (const category of CATEGORIES) {
+				if (!possible.get(physician.id)?.has(category)) {
+					physician.targets[semester][category] = 0;
+				}
+			}
 		}
 	}
 	for (const category of CATEGORIES) {
-		const split = evenSplit(capacity[category], active.length);
-		active.forEach((physician, index) => {
+		const eligible = active.filter((physician) => possible.get(physician.id)?.has(category));
+		const split = evenSplit(capacity[category], eligible.length);
+		eligible.forEach((physician, index) => {
 			physician.targets[semester][category] = split[index] ?? 0;
 		});
 	}
@@ -146,14 +164,28 @@ export function averageTargets(
 export function adjustTargets(
 	physicians: Physician[],
 	semester: SemesterId,
-	capacity: Quota
+	capacity: Quota,
+	slots: Slot[] = []
 ): void {
 	const active = activePhysicians(physicians);
 	if (!active.length) return;
+	const possible = new Map<string, Set<Category>>();
+	for (const physician of active) {
+		possible.set(
+			physician.id,
+			slots.length ? weekdayPossibleCategories(physician, slots, semester) : new Set(CATEGORIES)
+		);
+	}
 	for (const category of CATEGORIES) {
-		const current = active.map((physician) => physician.targets[semester][category] ?? 0);
+		const eligible = active.filter((physician) => possible.get(physician.id)?.has(category));
+		for (const physician of active) {
+			if (!possible.get(physician.id)?.has(category)) {
+				physician.targets[semester][category] = 0;
+			}
+		}
+		const current = eligible.map((physician) => physician.targets[semester][category] ?? 0);
 		const next = normalizeToTotal(current, capacity[category]);
-		active.forEach((physician, index) => {
+		eligible.forEach((physician, index) => {
 			physician.targets[semester][category] = next[index] ?? 0;
 		});
 	}

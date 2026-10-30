@@ -1,12 +1,61 @@
-import type { Physician } from '#lib/domain/types.js';
+import type { Physician, Weekday, WeekdayRank } from '#lib/domain/types.js';
+import {
+	MAX_UNAVAILABLE_WEEKDAYS,
+	WEEKDAYS,
+	formatWeekdayPreferencesCsv,
+	sortedWeekdays
+} from '#lib/domain/weekdays.js';
 
 export interface CsvPhysician {
 	name: string;
 	phone: string;
 	exempt: boolean;
+	unavailableWeekdays: Weekday[];
+	weekdayPreferences: Partial<Record<Weekday, WeekdayRank>>;
+	/** Tokens that were not recognised, reported in the import preview. */
+	invalidWeekdays: string[];
+	invalidPreferences: string[];
 }
 
 const EXEMPT_VALUES = new Set(['oui', 'yes', 'true', '1', 'x', 'exempt', 'exempte', 'exemptee']);
+
+const WEEKDAY_VALUES = new Set<string>(WEEKDAYS);
+
+const DAY_HEADERS = [
+	'jours indisponibles',
+	'jours indisponible',
+	'indisponibles',
+	'indisponible',
+	'indispo',
+	'unavailable',
+	'unavailable days',
+	'jours off',
+	'repos'
+];
+
+const PREFERENCE_HEADERS = [
+	'jours preferes',
+	'jours prefere',
+	'preferences',
+	'preference',
+	'preferred days',
+	'preferred',
+	'jours pref'
+];
+
+interface RawWeekdaySelection {
+	days: Weekday[];
+	preferences: Array<{ day: Weekday; rank: WeekdayRank }>;
+	invalidDays: string[];
+	invalidPreferences: string[];
+}
+
+interface ParsedWeekdaySelection {
+	weekdays: Weekday[];
+	weekdayPreferences: Partial<Record<Weekday, WeekdayRank>>;
+	invalidWeekdays: string[];
+	invalidPreferences: string[];
+}
 
 function normalize(value: string): string {
 	return value
@@ -14,6 +63,96 @@ function normalize(value: string): string {
 		.replace(/[\u0300-\u036f]/g, '')
 		.trim()
 		.toLowerCase();
+}
+
+/** Splits a cell into bare day codes and `day=rank` pairs. */
+function tokenizeSelection(value: string): RawWeekdaySelection {
+	const days: Weekday[] = [];
+	const preferences: Array<{ day: Weekday; rank: WeekdayRank }> = [];
+	const invalidDays: string[] = [];
+	const invalidPreferences: string[] = [];
+
+	for (const rawToken of value.split(/[\s,;/|]+/)) {
+		const token = normalize(rawToken);
+		if (!token) continue;
+		if (token.includes('=')) {
+			const [dayPart, rankPart] = token.split('=');
+			const day = (dayPart ?? '').trim();
+			const rank = Number(rankPart);
+			if (WEEKDAY_VALUES.has(day) && Number.isInteger(rank) && rank >= 1 && rank <= 5) {
+				preferences.push({ day: day as Weekday, rank: rank as WeekdayRank });
+			} else {
+				invalidPreferences.push(token);
+			}
+			continue;
+		}
+		if (WEEKDAY_VALUES.has(token)) days.push(token as Weekday);
+		else invalidDays.push(token);
+	}
+
+	return { days, preferences, invalidDays, invalidPreferences };
+}
+
+/** Enforces the max-4 rule, unique ranks, and preferences on available days only. */
+function normalizeSelection(raw: RawWeekdaySelection): ParsedWeekdaySelection {
+	const uniqueDays = sortedWeekdays(raw.days);
+	const weekdays = uniqueDays.slice(0, MAX_UNAVAILABLE_WEEKDAYS);
+	const invalidWeekdays = [...raw.invalidDays, ...uniqueDays.slice(MAX_UNAVAILABLE_WEEKDAYS)];
+
+	const weekdayPreferences: Partial<Record<Weekday, WeekdayRank>> = {};
+	const invalidPreferences = [...raw.invalidPreferences];
+	const usedDays = new Set<Weekday>();
+	const usedRanks = new Set<number>();
+	const ordered = [...raw.preferences].sort(
+		(left, right) => WEEKDAYS.indexOf(left.day) - WEEKDAYS.indexOf(right.day)
+	);
+
+	for (const { day, rank } of ordered) {
+		if (usedDays.has(day) || usedRanks.has(rank) || weekdays.includes(day)) {
+			invalidPreferences.push(`${day}=${rank}`);
+			continue;
+		}
+		weekdayPreferences[day] = rank;
+		usedDays.add(day);
+		usedRanks.add(rank);
+	}
+
+	return {
+		weekdays,
+		weekdayPreferences,
+		invalidWeekdays: [...new Set(invalidWeekdays)],
+		invalidPreferences: [...new Set(invalidPreferences)]
+	};
+}
+
+/** Parses `lun,mar` (strict French codes, Monday–Friday only). Unknown tokens are kept for reporting. */
+export function parseUnavailableWeekdays(value: string): {
+	weekdays: Weekday[];
+	invalid: string[];
+} {
+	const raw = tokenizeSelection(value);
+	const normalized = normalizeSelection({ ...raw, preferences: [] });
+	return {
+		weekdays: normalized.weekdays,
+		invalid: [
+			...normalized.invalidWeekdays,
+			...raw.preferences.map(({ day, rank }) => `${day}=${rank}`),
+			...raw.invalidPreferences
+		]
+	};
+}
+
+/** Parses `lun=1,mer=3`. Bare day codes are reported as invalid preferences. */
+export function parseWeekdayPreferences(value: string): {
+	preferences: Partial<Record<Weekday, WeekdayRank>>;
+	invalid: string[];
+} {
+	const raw = tokenizeSelection(value);
+	const normalized = normalizeSelection({ ...raw, days: [] });
+	return {
+		preferences: normalized.weekdayPreferences,
+		invalid: [...normalized.invalidPreferences, ...raw.days, ...raw.invalidDays]
+	};
 }
 
 function detectDelimiter(text: string): string {
@@ -65,7 +204,7 @@ function parseRows(text: string, delimiter: string): string[][] {
 	return rows;
 }
 
-/** Imports `Nom;Téléphone;Exempté` (header optional, `;`, `,` or tab). */
+/** Imports `Nom;Téléphone;Exempté;Jours indisponibles;Jours préférés` (header optional). */
 export function parseCsv(text: string): CsvPhysician[] {
 	const clean = text
 		.replace(/^\uFEFF/, '')
@@ -93,6 +232,8 @@ export function parseCsv(text: string): CsvPhysician[] {
 	let nameIndex = 0;
 	let phoneIndex = 1;
 	let exemptIndex = 2;
+	let dayIndex: number | null = start === 0 ? 3 : null;
+	let preferenceIndex: number | null = start === 0 ? 4 : null;
 	if (start === 1) {
 		const phoneColumn = header.findIndex((cell) =>
 			['telephone', 'tel', 'phone', 'portable', 'mobile'].includes(cell)
@@ -100,9 +241,26 @@ export function parseCsv(text: string): CsvPhysician[] {
 		const exemptColumn = header.findIndex((cell) =>
 			['exempte', 'exempt', 'exemption'].includes(cell)
 		);
+		const dayColumn = header.findIndex((cell) => DAY_HEADERS.includes(cell));
+		const preferenceColumn = header.findIndex((cell) => PREFERENCE_HEADERS.includes(cell));
 		if (phoneColumn >= 0) phoneIndex = phoneColumn;
 		if (exemptColumn >= 0) exemptIndex = exemptColumn;
+		if (dayColumn >= 0) dayIndex = dayColumn;
+		if (preferenceColumn >= 0) preferenceIndex = preferenceColumn;
 	}
+
+	const listIndexes = [dayIndex, preferenceIndex].filter(
+		(index): index is number => index !== null
+	);
+	const sortedListIndexes = [...listIndexes].sort((left, right) => left - right);
+	const listStart = sortedListIndexes.length ? sortedListIndexes[0] : -1;
+	const listsAtTail =
+		start === 0 ||
+		(sortedListIndexes.length > 0 &&
+			sortedListIndexes[sortedListIndexes.length - 1] === header.length - 1 &&
+			sortedListIndexes.every(
+				(index, position) => position === 0 || index === sortedListIndexes[position - 1] + 1
+			));
 
 	const result: CsvPhysician[] = [];
 	for (let index = start; index < rows.length; index += 1) {
@@ -111,17 +269,53 @@ export function parseCsv(text: string): CsvPhysician[] {
 		if (!name) continue;
 		const phone = (row[phoneIndex] ?? '').trim();
 		const exempt = EXEMPT_VALUES.has(normalize(row[exemptIndex] ?? ''));
-		result.push({ name, phone, exempt });
+
+		let raw: RawWeekdaySelection;
+		if (listsAtTail && listStart >= 0) {
+			// Commas/semicolons inside the day lists collide with the file delimiter:
+			// re-join the tail and classify each token (bare day vs day=rank).
+			raw = tokenizeSelection(row.slice(listStart).join(','));
+		} else {
+			const dayRaw = tokenizeSelection(dayIndex !== null ? (row[dayIndex] ?? '') : '');
+			const preferenceRaw = tokenizeSelection(
+				preferenceIndex !== null ? (row[preferenceIndex] ?? '') : ''
+			);
+			raw = {
+				days: dayRaw.days,
+				preferences: preferenceRaw.preferences,
+				invalidDays: dayRaw.invalidDays,
+				invalidPreferences: [
+					...dayRaw.invalidPreferences,
+					...dayRaw.preferences.map(({ day, rank }) => `${day}=${rank}`),
+					...preferenceRaw.days,
+					...preferenceRaw.invalidDays,
+					...preferenceRaw.invalidPreferences
+				]
+			};
+		}
+
+		const parsed = normalizeSelection(raw);
+		result.push({
+			name,
+			phone,
+			exempt,
+			unavailableWeekdays: parsed.weekdays,
+			weekdayPreferences: parsed.weekdayPreferences,
+			invalidWeekdays: parsed.invalidWeekdays,
+			invalidPreferences: parsed.invalidPreferences
+		});
 	}
 	return result;
 }
 
 export function toCsv(physicians: Physician[]): string {
-	const lines = ['Nom;Téléphone;Exempté'];
+	const lines = ['Nom;Téléphone;Exempté;Jours indisponibles;Jours préférés'];
 	for (const physician of [...physicians].sort((a, b) => a.sortOrder - b.sortOrder)) {
 		const name = physician.name.replace(/;/g, ',');
 		const phone = physician.phone.replace(/;/g, ',');
-		lines.push(`${name};${phone};${physician.exempt ? 'oui' : 'non'}`);
+		const weekdays = sortedWeekdays(physician.unavailableWeekdays ?? []).join(',');
+		const preferences = formatWeekdayPreferencesCsv(physician);
+		lines.push(`${name};${phone};${physician.exempt ? 'oui' : 'non'};${weekdays};${preferences}`);
 	}
 	return lines.join('\r\n');
 }
