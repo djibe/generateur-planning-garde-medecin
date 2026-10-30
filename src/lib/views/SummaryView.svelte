@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { tooltip } from '#lib/actions/tooltip.js';
-	import { isAbsentAllYear } from '#lib/domain/absence.js';
-	import { CATEGORIES, CATEGORY_LABELS, CATEGORY_SHORT } from '#lib/domain/quotas.js';
+	import { isAbsentAllYear, isUnavailableInSemester } from '#lib/domain/absence.js';
+	import { CATEGORIES, CATEGORY_LABELS, CATEGORY_SHORT, emptyQuota } from '#lib/domain/quotas.js';
 	import { targetDeviation } from '#lib/domain/stats.js';
 	import type { Category, Physician, SemesterId } from '#lib/domain/types.js';
+	import { weekdayPossibleCategories } from '#lib/domain/weekdays.js';
 	import { exportSummaryWorkbook } from '#lib/io/excel.js';
 	import { app } from '#lib/stores/app.svelte.js';
 
@@ -49,9 +50,38 @@
 		return semester === 'year' ? entry.year : entry[semester];
 	}
 
+	function targetsFor(physician: Physician) {
+		return {
+			S1: app.equitable.S1.get(physician.id) ?? emptyQuota(),
+			S2: app.equitable.S2.get(physician.id) ?? emptyQuota()
+		};
+	}
+
 	function deviation(physician: Physician, semester: SemesterId | 'year'): number {
 		const entry = statsById.get(physician.id);
-		return entry ? targetDeviation(entry, semester, physician) : 0;
+		return entry ? targetDeviation(entry, semester, targetsFor(physician)) : 0;
+	}
+
+	function maxSpread(semester: SemesterId | 'year', category: Category): number {
+		if (!profile) return 0;
+		const eligible = availablePhysicians.filter((physician) => {
+			if (semester === 'year') {
+				return (
+					(!isUnavailableInSemester(physician, profile.year, 'S1') &&
+						weekdayPossibleCategories(physician, app.slots, 'S1').has(category)) ||
+					(!isUnavailableInSemester(physician, profile.year, 'S2') &&
+						weekdayPossibleCategories(physician, app.slots, 'S2').has(category))
+				);
+			}
+			return (
+				!isUnavailableInSemester(physician, profile.year, semester) &&
+				weekdayPossibleCategories(physician, app.slots, semester).has(category)
+			);
+		});
+		const values = eligible.map(
+			(physician) => bucket(physician.id, semester)?.weights[category] ?? 0
+		);
+		return values.length ? Math.max(...values) - Math.min(...values) : 0;
 	}
 
 	function totalDaysFor(semester: SemesterId | 'year'): number {
@@ -61,9 +91,9 @@
 		);
 	}
 
-	function totalTagFor(semester: SemesterId, category: Category): number {
+	function totalWeightFor(semester: SemesterId, category: Category): number {
 		return physicians.reduce(
-			(sum, physician) => sum + (statsById.get(physician.id)?.[semester].tags[category] ?? 0),
+			(sum, physician) => sum + (statsById.get(physician.id)?.[semester].weights[category] ?? 0),
 			0
 		);
 	}
@@ -146,9 +176,9 @@
 		</div>
 		<div class="col-6 col-md-3">
 			<div class="stat">
-				<div class="label">Objectifs en écart</div>
-				<div class="value" class:text-warning={app.mismatches.length > 0}>
-					{app.mismatches.length}
+				<div class="label">Écart d’équité max.</div>
+				<div class="value" class:text-warning={assignedSlots > 0 && app.equityGap > 1}>
+					{assignedSlots > 0 ? app.equityGap : '—'}
 				</div>
 			</div>
 		</div>
@@ -188,7 +218,7 @@
 											>{CATEGORY_SHORT[category]}</th
 										>
 									{/each}
-									<th class="text-center">Écart cible</th>
+									<th class="text-center">Écart équité</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -199,7 +229,7 @@
 										<td class="fw-medium text-nowrap">{physician.name || 'Sans nom'}</td>
 										<td class="text-center fw-semibold mono">{entry?.days ?? 0}</td>
 										{#each CATEGORIES as category (category)}
-											<td class="text-center mono">{entry?.tags[category] ?? 0}</td>
+											<td class="text-center mono">{entry?.weights[category] ?? 0}</td>
 										{/each}
 										<td class="text-center">
 											<span class:quota-mismatch={offset > 1} class:quota-ok={offset <= 1}>
@@ -214,7 +244,18 @@
 									<th>Total</th>
 									<th class="text-center mono">{totalDaysFor(semester)}</th>
 									{#each CATEGORIES as category (category)}
-										<th class="text-center mono">{totalTagFor(semester, category)}</th>
+										<th class="text-center mono">{totalWeightFor(semester, category)}</th>
+									{/each}
+									<th></th>
+								</tr>
+								<tr>
+									<th>Écart max</th>
+									<th></th>
+									{#each CATEGORIES as category (category)}
+										{@const spread = maxSpread(semester, category)}
+										<th class="text-center mono" class:quota-mismatch={spread > 1}>
+											{spread}
+										</th>
 									{/each}
 									<th></th>
 								</tr>
@@ -247,7 +288,7 @@
 										>{CATEGORY_SHORT[category]}</th
 									>
 								{/each}
-								<th class="text-center">Écart cible</th>
+								<th class="text-center">Écart équité</th>
 								<th class="text-center">Espacement</th>
 								<th style="min-width: 9rem">Équilibre</th>
 							</tr>
@@ -263,7 +304,7 @@
 									<td class="text-center mono">{entry?.year.shifts ?? 0}</td>
 									<td class="text-center mono">{entry?.year.weekends ?? 0}</td>
 									{#each CATEGORIES as category (category)}
-										<td class="text-center mono">{entry?.year.tags[category] ?? 0}</td>
+										<td class="text-center mono">{entry?.year.weights[category] ?? 0}</td>
 									{/each}
 									<td class="text-center">
 										<span class:quota-mismatch={offset > 1} class:quota-ok={offset <= 1}>
@@ -309,9 +350,24 @@
 									<th class="text-center mono">
 										{physicians.reduce(
 											(sum, physician) =>
-												sum + (statsById.get(physician.id)?.year.tags[category] ?? 0),
+												sum + (statsById.get(physician.id)?.year.weights[category] ?? 0),
 											0
 										)}
+									</th>
+								{/each}
+								<th></th>
+								<th></th>
+								<th></th>
+							</tr>
+							<tr>
+								<th>Écart max</th>
+								<th></th>
+								<th></th>
+								<th></th>
+								{#each CATEGORIES as category (category)}
+									{@const spread = maxSpread('year', category)}
+									<th class="text-center mono" class:quota-mismatch={spread > 1}>
+										{spread}
 									</th>
 								{/each}
 								<th></th>
@@ -323,8 +379,9 @@
 				</div>
 			</div>
 			<div class="app-card-foot section-note">
-				Un jour férié tombant un vendredi, samedi ou dimanche est compté dans sa colonne de week-end
-				et dans « Férié » : la somme des colonnes peut donc dépasser le nombre de jours.
+				Les colonnes comptent les jours réels par catégorie principale : un jour férié en week-end
+				compte pour un jour férié et un jour de week-end. « Écart max » indique l’écart entre le
+				médecin le mieux et le moins bien servi pour la catégorie.
 			</div>
 		</section>
 	{/if}

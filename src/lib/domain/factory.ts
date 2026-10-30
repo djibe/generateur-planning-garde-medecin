@@ -1,4 +1,3 @@
-import { emptyQuota } from './quotas';
 import { randomSeed } from './rng';
 import type { Physician, Profile, ProfileSummary, Weekday, WeekdayRank } from './types';
 
@@ -27,8 +26,6 @@ export function createPhysician(
 		absenceTo,
 		unavailableWeekdays: [...unavailableWeekdays],
 		weekdayPreferences: { ...weekdayPreferences },
-		targets: { S1: emptyQuota(), S2: emptyQuota() },
-		targetBase: { S1: emptyQuota(), S2: emptyQuota() },
 		sortOrder
 	};
 }
@@ -89,8 +86,7 @@ export function inputSignature(profile: Profile): string {
 					Object.entries(physician.weekdayPreferences ?? {}).sort(([left], [right]) =>
 						left.localeCompare(right)
 					)
-				),
-				targets: physician.targets
+				)
 			}))
 	});
 }

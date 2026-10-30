@@ -221,7 +221,7 @@
 								<td class="text-center mono">{entry.days}</td>
 								<td class="text-center mono">{entry.shifts}</td>
 								{#each CATEGORIES as category (category)}
-									<td class="text-center mono">{entry.tags[category]}</td>
+									<td class="text-center mono">{entry.weights[category]}</td>
 								{/each}
 							</tr>
 						{/each}
@@ -230,7 +230,7 @@
 							<td class="text-center mono">{doctorStats?.year.days ?? 0}</td>
 							<td class="text-center mono">{doctorStats?.year.shifts ?? 0}</td>
 							{#each CATEGORIES as category (category)}
-								<td class="text-center mono">{doctorStats?.year.tags[category] ?? 0}</td>
+								<td class="text-center mono">{doctorStats?.year.weights[category] ?? 0}</td>
 							{/each}
 						</tr>
 					</tbody>

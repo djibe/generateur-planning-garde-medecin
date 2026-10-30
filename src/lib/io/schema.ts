@@ -1,15 +1,6 @@
 import { z } from 'zod';
 import type { Profile } from '#lib/domain/types.js';
 
-const quotaSchema = z.object({
-	weekday: z.number().int().min(0).default(0),
-	friday: z.number().int().min(0).default(0),
-	saturday: z.number().int().min(0).default(0),
-	sunday: z.number().int().min(0).default(0),
-	holidayEve: z.number().int().min(0).default(0),
-	holiday: z.number().int().min(0).default(0)
-});
-
 const weekdayRankSchema = z.number().int().min(1).max(5);
 
 const weekdayPreferencesSchema = z
@@ -30,8 +21,6 @@ const physicianSchema = z.object({
 	absenceTo: z.string().nullable().default(null),
 	unavailableWeekdays: z.array(z.enum(['lun', 'mar', 'mer', 'jeu', 'ven'])).default([]),
 	weekdayPreferences: weekdayPreferencesSchema,
-	targets: z.object({ S1: quotaSchema, S2: quotaSchema }),
-	targetBase: z.object({ S1: quotaSchema, S2: quotaSchema }).optional(),
 	sortOrder: z.number().int().default(0)
 });
 

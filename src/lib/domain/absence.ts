@@ -1,4 +1,4 @@
-import { addDays, diffDays, formatMedium } from '../utils/date';
+import { addDays, diffDays, formatMedium, yearEnd, yearStart } from '../utils/date';
 import type { ISODate, Physician, SemesterId } from './types';
 
 export interface DateRange {
@@ -62,6 +62,14 @@ export function availabilityRatio(
 	const length = semesterLength(year, semester);
 	if (length <= 0) return 1;
 	const absent = absenceDaysInSemester(physician, year, semester);
+	return Math.max(0, Math.min(1, (length - absent) / length));
+}
+
+/** Share of the whole year during which the physician is available, from 0 to 1. */
+export function availabilityRatioYear(physician: Physician, year: number): number {
+	const length = diffDays(yearStart(year), yearEnd(year)) + 1;
+	if (length <= 0) return 1;
+	const absent = absenceDaysInYear(physician, year);
 	return Math.max(0, Math.min(1, (length - absent) / length));
 }
 

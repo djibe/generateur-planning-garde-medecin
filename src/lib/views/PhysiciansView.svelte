@@ -14,10 +14,9 @@
 		CATEGORY_SHORT,
 		capacityByCategory,
 		emptyQuota,
-		quotaTotal,
-		targetsByCategory
+		quotaTotal
 	} from '#lib/domain/quotas.js';
-	import type { Category, Physician, SemesterId, Weekday, WeekdayRank } from '#lib/domain/types.js';
+	import type { Physician, SemesterId, Weekday, WeekdayRank } from '#lib/domain/types.js';
 	import {
 		MAX_UNAVAILABLE_WEEKDAYS,
 		WEEKDAYS,
@@ -39,17 +38,20 @@
 		[...(profile?.physicians ?? [])].sort((left, right) => left.sortOrder - right.sortOrder)
 	);
 	const capacity = $derived(capacityByCategory(app.slots, semester));
-	const targets = $derived(
-		profile ? targetsByCategory(profile.physicians, profile.year, semester) : emptyQuota()
-	);
-	const mismatches = $derived(app.mismatches.filter((entry) => entry.semester === semester));
-	const mismatchCategories = $derived(new Set(mismatches.map((entry) => entry.category)));
-	const totalTarget = $derived(CATEGORIES.reduce((sum, category) => sum + targets[category], 0));
+	const equitable = $derived(app.equitable[semester]);
 	const totalCapacity = $derived(CATEGORIES.reduce((sum, category) => sum + capacity[category], 0));
+	const uncovered = $derived(
+		CATEGORIES.filter((category) => {
+			const total = physicians.reduce(
+				(sum, physician) => sum + (equitable.get(physician.id)?.[category] ?? 0),
+				0
+			);
+			return capacity[category] > 0 && total < capacity[category];
+		})
+	);
 
-	function onTargetInput(physician: Physician, category: Category, event: Event) {
-		const value = Number((event.currentTarget as HTMLInputElement).value);
-		app.setTarget(semester, physician.id, category, value);
+	function targetFor(physician: Physician) {
+		return equitable.get(physician.id) ?? emptyQuota();
 	}
 
 	function weekdayValue(physician: Physician, day: Weekday): string {
@@ -467,7 +469,7 @@
 	{#if physicians.length}
 		<section class="app-card">
 			<div class="app-card-head">
-				<h2><i class="bi bi-bullseye me-2"></i>Objectifs de garde par semestre</h2>
+				<h2><i class="bi bi-bullseye me-2"></i>Répartition équitable par semestre</h2>
 				<div class="ms-auto d-flex flex-wrap align-items-center gap-2">
 					<div class="btn-group btn-group-sm" role="group" aria-label="Semestre">
 						<button
@@ -475,7 +477,7 @@
 							class="btn btn-outline-primary"
 							class:active={semester === 'S1'}
 							onclick={() => (semester = 'S1')}
-							use:tooltip={'Saisir les objectifs du premier semestre'}
+							use:tooltip={'Afficher la répartition du premier semestre'}
 						>
 							Semestre 1
 						</button>
@@ -484,27 +486,11 @@
 							class="btn btn-outline-primary"
 							class:active={semester === 'S2'}
 							onclick={() => (semester = 'S2')}
-							use:tooltip={'Saisir les objectifs du second semestre'}
+							use:tooltip={'Afficher la répartition du second semestre'}
 						>
 							Semestre 2
 						</button>
 					</div>
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-secondary"
-						use:tooltip={'Répartir au prorata de la disponibilité (absences déduites)'}
-						onclick={() => app.applyAverageTargets(semester)}
-					>
-						<i class="bi bi-magic me-1"></i> Répartition équitable
-					</button>
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-secondary"
-						use:tooltip={'Ajuster les objectifs actuels aux créneaux, absences déduites'}
-						onclick={() => app.adjustTargetsToCapacity(semester)}
-					>
-						<i class="bi bi-rulers me-1"></i> Ajuster aux créneaux
-					</button>
 				</div>
 			</div>
 
@@ -527,6 +513,7 @@
 						</thead>
 						<tbody>
 							{#each physicians as physician (physician.id)}
+								{@const target = targetFor(physician)}
 								<tr class:row-absent={isAbsentAllYear(physician, profile.year)}>
 									<td class="text-nowrap">
 										{physician.name || 'Sans nom'}
@@ -538,38 +525,13 @@
 										{semesterAbsenceDays(physician)}
 									</td>
 									{#each CATEGORIES as category (category)}
-										<td class="text-center">
-											<input
-												type="number"
-												min="0"
-												max="400"
-												class="form-control form-control-sm quota-input"
-												value={physician.targets[semester][category]}
-												aria-label={`${CATEGORY_LABELS[category]} — ${physician.name || 'sans nom'}`}
-												oninput={(event) => onTargetInput(physician, category, event)}
-											/>
-										</td>
+										<td class="text-center mono">{target[category]}</td>
 									{/each}
-									<td class="text-center fw-semibold mono"
-										>{quotaTotal(physician.targets[semester])}</td
-									>
+									<td class="text-center fw-semibold mono">{quotaTotal(target)}</td>
 								</tr>
 							{/each}
 						</tbody>
 						<tfoot>
-							<tr>
-								<th>Objectifs</th>
-								<td></td>
-								{#each CATEGORIES as category (category)}
-									<td
-										class="text-center mono"
-										class:quota-mismatch={mismatchCategories.has(category)}
-									>
-										{targets[category]}
-									</td>
-								{/each}
-								<td class="text-center mono fw-semibold">{totalTarget}</td>
-							</tr>
 							<tr>
 								<th>Jours disponibles</th>
 								<td></td>
@@ -582,39 +544,20 @@
 					</table>
 				</div>
 			</div>
-			<div class="app-card-foot small text-secondary">
-				Les objectifs sont indicatifs : le générateur cherche à s’en approcher tout en espaçant les
-				gardes. « Répartition équitable » et « Ajuster aux créneaux » réduisent les jours dus au
-				prorata de la durée d’absence dans le semestre. Un jour férié tombant un vendredi, samedi ou
-				dimanche est compté dans sa catégorie de week-end et dans « Férié ».
-			</div>
-		</section>
-	{/if}
-
-	{#if app.mismatches.length}
-		<section class="app-card">
-			<div class="app-card-head">
-				<h2>
-					<i class="bi bi-exclamation-triangle me-2 text-warning"></i>Écarts entre objectifs et
-					créneaux
-				</h2>
-				<span class="badge text-bg-warning ms-auto">{app.mismatches.length}</span>
-			</div>
-			<div class="app-card-body">
-				<p class="section-note">
-					Le planning peut tout de même être généré : les objectifs sont souples. Pour un résultat
-					parfaitement équilibré, utilisez « Ajuster aux créneaux ».
-				</p>
-				<div class="d-flex flex-wrap gap-2">
-					{#each app.mismatches as mismatch (mismatch.semester + mismatch.category)}
-						<span class="chip">
-							{mismatch.semester} · {CATEGORY_LABELS[mismatch.category]} :
-							<strong class:quota-mismatch={mismatch.targets !== mismatch.capacity}>
-								{mismatch.targets} / {mismatch.capacity}
-							</strong>
-						</span>
-					{/each}
+			{#if uncovered.length}
+				<div class="app-card-body pt-0">
+					<p class="section-note text-warning-emphasis mb-0">
+						Aucun médecin éligible pour : {uncovered
+							.map((category) => CATEGORY_LABELS[category])
+							.join(', ')}. Ces créneaux resteront non pourvus.
+					</p>
 				</div>
+			{/if}
+			<div class="app-card-foot small text-secondary">
+				La répartition est calculée automatiquement : chaque catégorie est partagée aussi
+				équitablement que possible entre les médecins éligibles, au prorata de leurs absences. Le
+				générateur privilégie cet équilibre, puis l’espacement, puis les jours préférés. Un jour
+				férié en week-end compte pour un jour férié et un jour de week-end.
 			</div>
 		</section>
 	{/if}

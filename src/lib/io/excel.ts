@@ -1,6 +1,12 @@
 import { absenceDaysInYear, formatAbsence, hasAbsence } from '#lib/domain/absence.js';
 import { slotLabel } from '#lib/domain/calendar.js';
-import { CATEGORIES, CATEGORY_LABELS, quotaTotal, quotaMismatches } from '#lib/domain/quotas.js';
+import {
+	CATEGORIES,
+	CATEGORY_LABELS,
+	emptyQuota,
+	equitableTargets,
+	quotaTotal
+} from '#lib/domain/quotas.js';
 import { computeAllStats, targetDeviation } from '#lib/domain/stats.js';
 import type { Physician, Profile, SemesterId, Slot } from '#lib/domain/types.js';
 import { formatUnavailableWeekdays, formatWeekdayPreferences } from '#lib/domain/weekdays.js';
@@ -136,17 +142,18 @@ export async function exportPhysiciansWorkbook(profile: Profile, slots: Slot[]):
 		{ label: 'Créneaux', value: slots.length }
 	];
 
-	const mismatches = quotaMismatches(physicians, profile.year, slots);
-	for (const mismatch of mismatches) {
-		parameterRows.push({
-			label: `Écart ${mismatch.semester} — ${CATEGORY_LABELS[mismatch.category]}`,
-			value: `objectifs ${mismatch.targets} / créneaux ${mismatch.capacity}`
-		});
-	}
-
+	const stats = computeAllStats(profile, slots);
+	const hasFirstSemester = Object.keys(profile.assignments.S1).length > 0;
+	const firstCounts = new Map(stats.map((entry) => [entry.physicianId, { ...entry.S1.weights }]));
+	const targets = equitableTargets(
+		physicians,
+		profile.year,
+		slots,
+		hasFirstSemester ? firstCounts : undefined
+	);
 	const quotaSheet = (semester: SemesterId): SheetSpec => ({
-		name: `Objectifs ${semester}`,
-		title: `Objectifs ${semester} — ${profile.area || profile.name} ${profile.year}`,
+		name: `Répartition ${semester}`,
+		title: `Répartition équitable ${semester} — ${profile.area || profile.name} ${profile.year}`,
 		columns: [
 			{ header: 'Médecin', key: 'name', width: 28 },
 			...CATEGORIES.map((category) => ({
@@ -156,11 +163,14 @@ export async function exportPhysiciansWorkbook(profile: Profile, slots: Slot[]):
 			})),
 			{ header: 'Total', key: 'total', width: 10 }
 		],
-		rows: physicians.map((physician) => ({
-			name: physician.name || 'Sans nom',
-			...physician.targets[semester],
-			total: quotaTotal(physician.targets[semester])
-		}))
+		rows: physicians.map((physician) => {
+			const quota = targets[semester].get(physician.id) ?? emptyQuota();
+			return {
+				name: physician.name || 'Sans nom',
+				...quota,
+				total: quotaTotal(quota)
+			};
+		})
 	});
 
 	await exportSheets(fileBase(profile, 'parametres'), [
@@ -203,6 +213,14 @@ export async function exportPhysiciansWorkbook(profile: Profile, slots: Slot[]):
 export async function exportSummaryWorkbook(profile: Profile, slots: Slot[]): Promise<void> {
 	const physicians = sortPhysicians(profile);
 	const stats = computeAllStats(profile, slots);
+	const hasFirstSemester = Object.keys(profile.assignments.S1).length > 0;
+	const firstCounts = new Map(stats.map((entry) => [entry.physicianId, { ...entry.S1.weights }]));
+	const targets = equitableTargets(
+		physicians,
+		profile.year,
+		slots,
+		hasFirstSemester ? firstCounts : undefined
+	);
 	const columns: Column[] = [
 		{ header: 'Médecin', key: 'name', width: 28 },
 		{ header: 'Jours', key: 'days', width: 8 },
@@ -212,7 +230,7 @@ export async function exportSummaryWorkbook(profile: Profile, slots: Slot[]): Pr
 		{ header: 'Dimanche', key: 'sunday', width: 10 },
 		{ header: 'Veille férié', key: 'holidayEve', width: 12 },
 		{ header: 'Férié', key: 'holiday', width: 8 },
-		{ header: 'Écart cible', key: 'deviation', width: 11 },
+		{ header: 'Écart équité', key: 'deviation', width: 11 },
 		{ header: 'Espacement min. (j)', key: 'minGap', width: 16 }
 	];
 
@@ -220,16 +238,20 @@ export async function exportSummaryWorkbook(profile: Profile, slots: Slot[]): Pr
 		const rows = physicians.map((physician) => {
 			const entry = stats.find((item) => item.physicianId === physician.id);
 			const bucket = semester === 'year' ? entry?.year : semester === 'S1' ? entry?.S1 : entry?.S2;
+			const target = {
+				S1: targets.S1.get(physician.id) ?? emptyQuota(),
+				S2: targets.S2.get(physician.id) ?? emptyQuota()
+			};
 			return {
 				name: physician.name || 'Sans nom',
 				days: bucket?.days ?? 0,
-				weekday: bucket?.tags.weekday ?? 0,
-				friday: bucket?.tags.friday ?? 0,
-				saturday: bucket?.tags.saturday ?? 0,
-				sunday: bucket?.tags.sunday ?? 0,
-				holidayEve: bucket?.tags.holidayEve ?? 0,
-				holiday: bucket?.tags.holiday ?? 0,
-				deviation: entry ? targetDeviation(entry, semester, physician) : 0,
+				weekday: bucket?.weights.weekday ?? 0,
+				friday: bucket?.weights.friday ?? 0,
+				saturday: bucket?.weights.saturday ?? 0,
+				sunday: bucket?.weights.sunday ?? 0,
+				holidayEve: bucket?.weights.holidayEve ?? 0,
+				holiday: bucket?.weights.holiday ?? 0,
+				deviation: entry ? targetDeviation(entry, semester, target) : 0,
 				minGap: entry?.minGap ?? ''
 			};
 		});
@@ -316,12 +338,12 @@ export async function exportDoctorWorkbook(
 		{ label: 'Année', value: profile.year },
 		{ label: 'Jours de garde', value: stats?.year.days ?? 0 },
 		{ label: 'Gardes', value: stats?.year.shifts ?? 0 },
-		{ label: 'Semaines', value: stats?.year.tags.weekday ?? 0 },
-		{ label: 'Vendredis', value: stats?.year.tags.friday ?? 0 },
-		{ label: 'Samedis', value: stats?.year.tags.saturday ?? 0 },
-		{ label: 'Dimanches', value: stats?.year.tags.sunday ?? 0 },
-		{ label: 'Veilles de férié', value: stats?.year.tags.holidayEve ?? 0 },
-		{ label: 'Jours fériés', value: stats?.year.tags.holiday ?? 0 },
+		{ label: 'Semaines', value: stats?.year.weights.weekday ?? 0 },
+		{ label: 'Vendredis', value: stats?.year.weights.friday ?? 0 },
+		{ label: 'Samedis', value: stats?.year.weights.saturday ?? 0 },
+		{ label: 'Dimanches', value: stats?.year.weights.sunday ?? 0 },
+		{ label: 'Veilles de férié', value: stats?.year.weights.holidayEve ?? 0 },
+		{ label: 'Jours fériés', value: stats?.year.weights.holiday ?? 0 },
 		{ label: 'Week-ends', value: stats?.year.weekends ?? 0 },
 		{ label: 'Espacement minimum (j)', value: stats?.minGap ?? '—' },
 		{

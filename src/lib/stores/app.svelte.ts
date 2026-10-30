@@ -1,4 +1,5 @@
 import { browser } from '$app/env';
+import { isUnavailableInSemester } from '#lib/domain/absence.js';
 import { buildSlots, groupBySemester, semestersOf, slotLabel } from '#lib/domain/calendar.js';
 import {
 	createEmptyProfile,
@@ -8,20 +9,15 @@ import {
 	uid
 } from '#lib/domain/factory.js';
 import { generateSchedule, isAvailable } from '#lib/domain/generator.js';
-import {
-	adjustTargets,
-	averageTargets,
-	capacityByCategory,
-	quotaMismatches
-} from '#lib/domain/quotas.js';
+import { CATEGORIES, emptyEquitableTargets, equitableTargets } from '#lib/domain/quotas.js';
 import { computeAllStats } from '#lib/domain/stats.js';
 import {
 	WEEKDAYS,
 	canMakeWeekdayUnavailable,
-	nextWeekdayPreferences
+	nextWeekdayPreferences,
+	weekdayPossibleCategories
 } from '#lib/domain/weekdays.js';
 import type {
-	Category,
 	Physician,
 	Profile,
 	ProfileSummary,
@@ -83,9 +79,56 @@ class AppStore {
 
 	statsById = $derived.by(() => new Map(this.stats.map((entry) => [entry.physicianId, entry])));
 
-	mismatches = $derived.by(() =>
-		this.active ? quotaMismatches(this.active.physicians, this.active.year, this.slots) : []
-	);
+	equitable = $derived.by(() => {
+		if (!this.active) return emptyEquitableTargets();
+		const hasFirstSemester = Object.keys(this.active.assignments.S1).length > 0;
+		const firstCounts = new Map(
+			this.stats.map((entry) => [entry.physicianId, { ...entry.S1.weights }])
+		);
+		return equitableTargets(
+			this.active.physicians,
+			this.active.year,
+			this.slots,
+			hasFirstSemester ? firstCounts : undefined
+		);
+	});
+
+	equityGap = $derived.by(() => {
+		const profile = this.active;
+		if (!profile) return 0;
+		let max = 0;
+		for (const semester of ['S1', 'S2'] as SemesterId[]) {
+			const active = profile.physicians.filter(
+				(physician) => !isUnavailableInSemester(physician, profile.year, semester)
+			);
+			const possible = new Map(
+				active.map((physician) => [
+					physician.id,
+					weekdayPossibleCategories(physician, this.slots, semester)
+				])
+			);
+			for (const category of CATEGORIES) {
+				let maxCount = 0;
+				let minCount = Number.POSITIVE_INFINITY;
+				let eligibleCount = 0;
+				for (const physician of active) {
+					if (!possible.get(physician.id)?.has(category)) continue;
+					const entry = this.statsById.get(physician.id);
+					const target = this.equitable[semester].get(physician.id);
+					if (!entry || !target) continue;
+					const value = entry[semester].weights[category];
+					max = Math.max(max, Math.abs(value - target[category]));
+					maxCount = Math.max(maxCount, value);
+					minCount = Math.min(minCount, value);
+					eligibleCount += 1;
+				}
+				if (eligibleCount) max = Math.max(max, maxCount - minCount);
+			}
+		}
+		return max;
+	});
+
+	unassignedCount = $derived.by(() => this.slots.filter((slot) => !this.assignmentOf(slot)).length);
 
 	stale = $derived.by(
 		() => !!this.active && this.active.generatedSignature !== inputSignature(this.active)
@@ -350,41 +393,6 @@ class AppStore {
 			value
 		);
 		return true;
-	}
-
-	setTarget(semester: SemesterId, physicianId: string, category: Category, value: number): void {
-		const physician = this.physicianMap.get(physicianId);
-		if (!physician) return;
-		const safe = Number.isFinite(value) ? Math.max(0, Math.min(400, Math.floor(value))) : 0;
-		physician.targets[semester][category] = safe;
-		physician.targetBase ??= { S1: { ...physician.targets.S1 }, S2: { ...physician.targets.S2 } };
-		physician.targetBase[semester][category] = safe;
-	}
-
-	applyAverageTargets(semester: SemesterId): void {
-		const profile = this.active;
-		if (!profile) return;
-		averageTargets(
-			profile.physicians,
-			profile.year,
-			semester,
-			capacityByCategory(this.slots, semester),
-			this.slots
-		);
-		this.notify('success', `Objectifs ${semester} répartis équitablement (absences déduites).`);
-	}
-
-	adjustTargetsToCapacity(semester: SemesterId): void {
-		const profile = this.active;
-		if (!profile) return;
-		adjustTargets(
-			profile.physicians,
-			profile.year,
-			semester,
-			capacityByCategory(this.slots, semester),
-			this.slots
-		);
-		this.notify('success', `Objectifs ${semester} ajustés aux créneaux (absences déduites).`);
 	}
 
 	importPhysicians(rows: CsvPhysician[], mode: 'append' | 'replace'): void {

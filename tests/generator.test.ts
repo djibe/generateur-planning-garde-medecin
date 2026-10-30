@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildSlots } from '#lib/domain/calendar.js';
 import { createPhysician } from '#lib/domain/factory.js';
 import { generateSchedule, isAvailable } from '#lib/domain/generator.js';
-import { CATEGORIES, averageTargets, capacityByCategory } from '#lib/domain/quotas.js';
+import { CATEGORIES, capacityByCategory, equitableTargets } from '#lib/domain/quotas.js';
 import { computeAllStats } from '#lib/domain/stats.js';
 import { weekdayIndex } from '#lib/utils/date.js';
 import type { Profile, WeekendMode } from '#lib/domain/types.js';
@@ -12,8 +12,6 @@ function makeProfile(count = 12, mode: WeekendMode = 'combined'): Profile {
 	const physicians = Array.from({ length: count }, (_, index) =>
 		createPhysician(index + 1, `Médecin ${index + 1}`, `06000000${index}`)
 	);
-	averageTargets(physicians, 2026, 'S1', capacityByCategory(slots, 'S1'));
-	averageTargets(physicians, 2026, 'S2', capacityByCategory(slots, 'S2'));
 	return {
 		schemaVersion: 1,
 		id: 'test-profile',
@@ -118,7 +116,26 @@ describe('generateSchedule', () => {
 		expect(result.assignments[slot!.id]).toBe(physician.id);
 	});
 
-	it('keeps the quota deviation small', () => {
+	it('warns when pins prevent perfect balance', () => {
+		const profile = makeProfile(4);
+		const slots = buildSlots(2026, 'split').filter((slot) => slot.semester === 'S1');
+		const pinned = slots.filter((slot) => slot.type === 'weekday').slice(0, 40);
+		const pins = Object.fromEntries(pinned.map((slot) => [slot.id, profile.physicians[0].id]));
+		const result = generateSchedule({
+			year: 2026,
+			physicians: profile.physicians,
+			slots,
+			pins,
+			seed: 17,
+			iterationsPerSemester: 5000
+		});
+		for (const slot of pinned) {
+			expect(result.assignments[slot.id]).toBe(profile.physicians[0].id);
+		}
+		expect(result.warnings.some((warning) => warning.includes('Équilibre non parfait'))).toBe(true);
+	});
+
+	it('balances every category as evenly as possible', () => {
 		const profile = makeProfile();
 		const slots = buildSlots(2026, 'combined');
 		const result = generateSchedule({
@@ -130,15 +147,79 @@ describe('generateSchedule', () => {
 		});
 		applyResult(profile, result);
 		const stats = computeAllStats(profile, slots);
-		for (const entry of stats) {
-			const physician = profile.physicians.find((item) => item.id === entry.physicianId)!;
+		const firstCounts = new Map(
+			profile.physicians.map((physician) => [
+				physician.id,
+				{
+					...stats.find((entry) => entry.physicianId === physician.id)!.S1.weights
+				}
+			])
+		);
+		const targets = equitableTargets(profile.physicians, 2026, slots, firstCounts);
+		// Holiday weekends consume both a holiday and a weekend day, so a
+		// 2-day spread can be unavoidable in the small holiday categories.
+		const allowedSpread = (capacity: number): number => (capacity >= 20 ? 1 : 2);
+		for (const semester of ['S1', 'S2'] as const) {
+			const capacity = capacityByCategory(slots, semester);
 			for (const category of CATEGORIES) {
-				const deviation =
-					Math.abs(entry.S1.weights[category] - physician.targets.S1[category]) +
-					Math.abs(entry.S2.weights[category] - physician.targets.S2[category]);
-				expect(deviation).toBeLessThanOrEqual(4);
+				const values = profile.physicians.map(
+					(physician) =>
+						stats.find((entry) => entry.physicianId === physician.id)?.[semester].weights[
+							category
+						] ?? 0
+				);
+				const spread = Math.max(...values) - Math.min(...values);
+				expect(spread).toBeLessThanOrEqual(allowedSpread(capacity[category]));
+				for (const physician of profile.physicians) {
+					const actual =
+						stats.find((entry) => entry.physicianId === physician.id)?.[semester].weights[
+							category
+						] ?? 0;
+					const target = targets[semester].get(physician.id)?.[category] ?? 0;
+					expect(Math.abs(actual - target)).toBeLessThanOrEqual(1);
+				}
 			}
 		}
+		const capacity = capacityByCategory(slots);
+		for (const category of CATEGORIES) {
+			const values = profile.physicians.map(
+				(physician) =>
+					stats.find((entry) => entry.physicianId === physician.id)?.year.weights[category] ?? 0
+			);
+			const spread = Math.max(...values) - Math.min(...values);
+			expect(spread).toBeLessThanOrEqual(allowedSpread(capacity[category]));
+		}
+	});
+
+	it('does not let weekday preferences break category balance', () => {
+		const allSlots = buildSlots(2026, 'split');
+		const mondays = allSlots
+			.filter((slot) => weekdayIndex(slot.start) === 0 && !slot.tags.holiday)
+			.slice(0, 10);
+		const fridays = allSlots
+			.filter((slot) => weekdayIndex(slot.start) === 4 && !slot.tags.holiday)
+			.slice(0, 10);
+		const slots = [...mondays, ...fridays].sort((left, right) =>
+			left.start.localeCompare(right.start)
+		);
+		const fridayLover = createPhysician(1, 'Vendredi', '', [], { ven: 1 });
+		const mondayLover = createPhysician(2, 'Lundi', '', [], { lun: 1 });
+		const result = generateSchedule({
+			year: 2026,
+			physicians: [fridayLover, mondayLover],
+			slots,
+			pins: {},
+			seed: 4,
+			iterationsPerSemester: 5000
+		});
+		const fridaysForLover = fridays.filter(
+			(slot) => result.assignments[slot.id] === fridayLover.id
+		).length;
+		const mondaysForLover = mondays.filter(
+			(slot) => result.assignments[slot.id] === mondayLover.id
+		).length;
+		expect(fridaysForLover).toBe(5);
+		expect(mondaysForLover).toBe(5);
 	});
 
 	it('spaces shifts reasonably', () => {
@@ -178,6 +259,30 @@ describe('generateSchedule', () => {
 				slot?.dates.some((date) => weekdayIndex(date) === 2 && !slot.tags.holiday)
 			).toBeFalsy();
 		}
+	});
+
+	it('balances a category among the physicians who can work it', () => {
+		const profile = makeProfile(4);
+		const excluded = profile.physicians[0];
+		excluded.unavailableWeekdays = ['ven'];
+		const slots = buildSlots(2026, 'combined');
+		const result = generateSchedule({
+			year: 2026,
+			physicians: profile.physicians,
+			slots,
+			pins: {},
+			seed: 19
+		});
+		applyResult(profile, result);
+		const stats = computeAllStats(profile, slots);
+		const fridays = profile.physicians
+			.filter((physician) => physician.id !== excluded.id)
+			.map(
+				(physician) =>
+					stats.find((entry) => entry.physicianId === physician.id)?.year.weights.friday ?? 0
+			);
+		expect(stats.find((entry) => entry.physicianId === excluded.id)?.year.weights.friday).toBe(0);
+		expect(Math.max(...fridays) - Math.min(...fridays)).toBeLessThanOrEqual(1);
 	});
 
 	it('favours preferred weekdays when targets allow it', () => {

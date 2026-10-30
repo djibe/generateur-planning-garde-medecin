@@ -61,6 +61,8 @@ function makeSlot(dates: ISODate[], holidays: Map<string, string>, year: number)
 
 	for (const date of dates) {
 		const primary = primaryType(date, holidays);
+		// Fairness and targets count actual days per primary category.
+		weights[primary] += 1;
 		if (primary === 'holiday') {
 			tags.holiday = true;
 			holidayName ??= holidays.get(date) ?? null;
@@ -75,16 +77,11 @@ function makeSlot(dates: ISODate[], holidays: Map<string, string>, year: number)
 		}
 	}
 
-	let type: Category;
-	if (isWeekendBlock) {
-		type = tags.holiday ? 'holiday' : 'saturday';
-		weights.saturday = 1;
-		weights.sunday = 1;
-		if (tags.holiday) weights.holiday = 1;
-	} else {
-		type = primaryType(dates[0], holidays);
-		weights[type] = 1;
-	}
+	const type: Category = isWeekendBlock
+		? tags.holiday
+			? 'holiday'
+			: 'saturday'
+		: primaryType(dates[0], holidays);
 
 	const semester = semesterOf(dates[0], year);
 	return {

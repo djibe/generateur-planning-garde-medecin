@@ -160,8 +160,10 @@
 				{#if app.stale && app.generated}
 					<span class="badge text-bg-warning">Données modifiées · à régénérer</span>
 				{/if}
-				{#if app.mismatches.length}
-					<span class="badge text-bg-danger">{app.mismatches.length} écart(s) d'objectifs</span>
+				{#if app.generated && app.unassignedCount > 0}
+					<span class="badge text-bg-danger">{app.unassignedCount} créneau(x) non pourvu(s)</span>
+				{:else if app.generated && app.equityGap > 1}
+					<span class="badge text-bg-warning">{app.equityGap} jour(s) d'écart d'équité</span>
 				{/if}
 				<span class="ms-auto">
 					{#if app.saving}

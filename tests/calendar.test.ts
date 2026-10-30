@@ -70,16 +70,25 @@ describe('buildSlots', () => {
 		expect(christmas?.holidayName).toBe('Noël');
 	});
 
-	it('adds the holiday weight to a combined weekend containing a holiday', () => {
+	it('counts a combined weekend containing a holiday as actual days', () => {
 		// 15/08/2026 is a Saturday: the weekend block is also a holiday.
 		const slots = buildSlots(2026, 'combined');
 		const assumption = slots.find((slot) => slot.dates.includes('2026-08-15'));
 		expect(assumption?.isWeekendBlock).toBe(true);
 		expect(assumption?.type).toBe('holiday');
-		expect(assumption?.weights.saturday).toBe(1);
+		expect(assumption?.weights.saturday).toBe(0);
 		expect(assumption?.weights.sunday).toBe(1);
 		expect(assumption?.weights.holiday).toBe(1);
 		expect(assumption?.holidayName).toBe('Assomption');
+	});
+
+	it('weights exactly one day per date in both modes', () => {
+		for (const mode of ['split', 'combined'] as const) {
+			for (const slot of buildSlots(2026, mode)) {
+				const total = Object.values(slot.weights).reduce((sum, value) => sum + value, 0);
+				expect(total).toBe(slot.dates.length);
+			}
+		}
 	});
 
 	it('groups slots by semester', () => {

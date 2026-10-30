@@ -49,10 +49,6 @@ export interface Physician {
 	unavailableWeekdays: Weekday[];
 	/** Optional Monday–Friday preference ranking. Missing day = neutral. */
 	weekdayPreferences: Partial<Record<Weekday, WeekdayRank>>;
-	/** Effective targets, after the absence prorating. */
-	targets: Record<SemesterId, Quota>;
-	/** Targets desired before absences, used to keep adjustments idempotent. */
-	targetBase?: Record<SemesterId, Quota>;
 	sortOrder: number;
 }
 
@@ -88,7 +84,6 @@ export interface ProfileSummary {
 export interface PhysicianSemesterStats {
 	shifts: number;
 	days: number;
-	tags: Quota;
 	weights: Quota;
 	weekends: number;
 }
@@ -100,7 +95,6 @@ export interface PhysicianStats {
 	year: {
 		shifts: number;
 		days: number;
-		tags: Quota;
 		weights: Quota;
 		weekends: number;
 	};
