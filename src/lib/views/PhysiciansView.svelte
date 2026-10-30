@@ -30,9 +30,13 @@
 	let csvOpen = $state(false);
 	let deletingId = $state<string | null>(null);
 	let exporting = $state(false);
+	let draggingId = $state<string | null>(null);
+	let dropTarget = $state<{ id: string; position: 'before' | 'after' } | null>(null);
 
 	const profile = $derived(app.active);
-	const physicians = $derived(profile?.physicians ?? []);
+	const physicians = $derived(
+		[...(profile?.physicians ?? [])].sort((left, right) => left.sortOrder - right.sortOrder)
+	);
 	const capacity = $derived(capacityByCategory(app.slots, semester));
 	const targets = $derived(
 		profile ? targetsByCategory(profile.physicians, profile.year, semester) : emptyQuota()
@@ -109,6 +113,65 @@
 		} finally {
 			exporting = false;
 		}
+	}
+
+	// ---------------------------------------------------------- réordonnancement
+
+	function clearDrag() {
+		draggingId = null;
+		dropTarget = null;
+	}
+
+	function onDragStart(event: DragEvent, physician: Physician) {
+		const handle = event.currentTarget as HTMLElement;
+		const row = handle.closest('tr');
+		if (event.dataTransfer) {
+			event.dataTransfer.effectAllowed = 'move';
+			event.dataTransfer.setData('text/plain', physician.id);
+			if (row) event.dataTransfer.setDragImage(row, 24, row.offsetHeight / 2);
+		}
+		draggingId = physician.id;
+	}
+
+	function onDragOver(event: DragEvent, physician: Physician) {
+		if (!draggingId || draggingId === physician.id) {
+			if (dropTarget) dropTarget = null;
+			return;
+		}
+		event.preventDefault();
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+		const row = event.currentTarget as HTMLElement;
+		const rect = row.getBoundingClientRect();
+		const position: 'before' | 'after' =
+			event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+		if (dropTarget?.id !== physician.id || dropTarget.position !== position) {
+			dropTarget = { id: physician.id, position };
+		}
+	}
+
+	function onDragLeave(event: DragEvent, physician: Physician) {
+		const row = event.currentTarget as HTMLElement;
+		const related = event.relatedTarget as Node | null;
+		if (related && row.contains(related)) return;
+		if (dropTarget?.id === physician.id) dropTarget = null;
+	}
+
+	function onDrop(event: DragEvent, physician: Physician) {
+		event.preventDefault();
+		const source = draggingId;
+		const target = dropTarget;
+		clearDrag();
+		if (!source || !target || target.id !== physician.id) return;
+		app.reorderPhysician(source, physician.id, target.position);
+	}
+
+	function onHandleKeydown(event: KeyboardEvent, physician: Physician, index: number) {
+		if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+		event.preventDefault();
+		const direction = event.key === 'ArrowUp' ? -1 : 1;
+		const neighbour = physicians[index + direction];
+		if (!neighbour) return;
+		app.reorderPhysician(physician.id, neighbour.id, direction === -1 ? 'before' : 'after');
 	}
 </script>
 
@@ -255,27 +318,32 @@
 						</thead>
 						<tbody>
 							{#each physicians as physician, index (physician.id)}
-								<tr class:row-absent={isAbsentAllYear(physician, profile.year)}>
+								<tr
+									class:row-absent={isAbsentAllYear(physician, profile.year)}
+									class:is-dragging={draggingId === physician.id}
+									class:drop-before={dropTarget?.id === physician.id &&
+										dropTarget.position === 'before'}
+									class:drop-after={dropTarget?.id === physician.id &&
+										dropTarget.position === 'after'}
+									ondragover={(event) => onDragOver(event, physician)}
+									ondragleave={(event) => onDragLeave(event, physician)}
+									ondrop={(event) => onDrop(event, physician)}
+								>
 									<td class="text-nowrap">
-										<span class="text-secondary mono me-1">{index + 1}</span>
-										<button
-											type="button"
-											class="btn btn-sm btn-icon"
-											title="Monter"
-											disabled={index === 0}
-											onclick={() => app.movePhysician(physician.id, -1)}
+										<span
+											class="drag-handle"
+											draggable="true"
+											role="button"
+											tabindex="0"
+											title="Glisser pour réordonner"
+											aria-label={`Réordonner ${physician.name || 'ce médecin'}`}
+											ondragstart={(event) => onDragStart(event, physician)}
+											ondragend={clearDrag}
+											onkeydown={(event) => onHandleKeydown(event, physician, index)}
 										>
-											<i class="bi bi-chevron-up"></i>
-										</button>
-										<button
-											type="button"
-											class="btn btn-sm btn-icon"
-											title="Descendre"
-											disabled={index === physicians.length - 1}
-											onclick={() => app.movePhysician(physician.id, 1)}
-										>
-											<i class="bi bi-chevron-down"></i>
-										</button>
+											<i class="bi bi-grip-vertical"></i>
+										</span>
+										<span class="text-secondary mono">{index + 1}</span>
 									</td>
 									<td>
 										<input

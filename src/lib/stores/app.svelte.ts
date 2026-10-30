@@ -285,19 +285,24 @@ class AppStore {
 		if (this.ui.doctorId === id) this.setDoctor(null);
 	}
 
-	movePhysician(id: string, direction: -1 | 1): void {
+	/** Moves a physician before or after another one and renumbers the whole list. */
+	reorderPhysician(id: string, targetId: string, position: 'before' | 'after'): void {
 		const profile = this.active;
-		if (!profile) return;
+		if (!profile || id === targetId) return;
 		const ordered = [...profile.physicians].sort((a, b) => a.sortOrder - b.sortOrder);
-		const index = ordered.findIndex((physician) => physician.id === id);
-		const target = index + direction;
-		if (index < 0 || target < 0 || target >= ordered.length) return;
-		const temporary = ordered[index];
-		ordered[index] = ordered[target];
-		ordered[target] = temporary;
-		ordered.forEach((physician, position) => {
-			physician.sortOrder = position + 1;
+		const from = ordered.findIndex((physician) => physician.id === id);
+		if (from < 0 || !ordered.some((physician) => physician.id === targetId)) return;
+
+		const [moved] = ordered.splice(from, 1);
+		const anchor = ordered.findIndex((physician) => physician.id === targetId);
+		const insertAt = position === 'before' ? anchor : anchor + 1;
+		if (insertAt === from) return;
+
+		ordered.splice(insertAt, 0, moved);
+		ordered.forEach((physician, index) => {
+			physician.sortOrder = index + 1;
 		});
+		profile.physicians = ordered;
 	}
 
 	setAbsence(physicianId: string, from: string | null, to: string | null): void {

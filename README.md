@@ -20,7 +20,7 @@ aucune donnée envoyée sur Internet.
   week-ends ne sont pas concernés.
 - Le générateur privilégie les jours préférés sans sacrifier les objectifs ni l'espacement.
 - Import CSV (`Nom;Téléphone;Absence du;Absence au;Jours indisponibles;Jours préférés`),
-  ajout/suppression, réordonnancement.
+  ajout/suppression, réordonnancement par glisser-déposer (poignée au survol de la ligne).
 - Objectifs **par semestre** et par catégorie : semaine, vendredi, samedi, dimanche,
   veille de férié, jour férié.
 - Boutons « Répartition équitable » (objectifs au prorata des créneaux et de la durée d'absence)
