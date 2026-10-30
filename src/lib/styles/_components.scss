@@ -63,7 +63,7 @@
 body {
 	background: var(--app-page-bg);
 	font-feature-settings: 'kern';
-	transition: all .3s;
+	transition: all 0.3s;
 	-webkit-font-smoothing: antialiased;
 }
 
@@ -345,7 +345,7 @@ h6,
 	font-variant-numeric: tabular-nums;
 }
 
-.row-exempt td {
+.row-absent td {
 	opacity: 0.68;
 }
 

@@ -21,7 +21,7 @@ function slotOn(date: string) {
 
 describe('weekdayPreferenceCost', () => {
 	it('rewards rank 1 and penalises rank 5 around a neutral baseline', () => {
-		const physician = createPhysician(1, 'A', '', false, [], {
+		const physician = createPhysician(1, 'A', '', [], {
 			lun: 1,
 			mar: 2,
 			mer: 3,
@@ -47,14 +47,14 @@ describe('weekdayPreferenceCost', () => {
 	});
 
 	it('ignores preferences on public holidays', () => {
-		const physician = createPhysician(1, 'A', '', false, [], { ven: 1 });
+		const physician = createPhysician(1, 'A', '', [], { ven: 1 });
 		const holiday = slotOn('2026-05-01');
 		expect(holiday.tags.holiday).toBe(true);
 		expect(weekdayPreferenceCost(physician, holiday)).toBe(0);
 	});
 
 	it('ignores preferences on weekends', () => {
-		const physician = createPhysician(1, 'A', '', false, [], { lun: 1 });
+		const physician = createPhysician(1, 'A', '', [], { lun: 1 });
 		const saturday = slotOn('2026-05-02');
 		expect(weekdayPreferenceCost(physician, saturday)).toBe(0);
 	});
@@ -88,26 +88,26 @@ describe('canMakeWeekdayUnavailable', () => {
 		(['lun', 'mar', 'mer', 'jeu', 'ven'] as Weekday[]).slice(0, count);
 
 	it('allows up to four unavailable days', () => {
-		const physician = createPhysician(1, 'A', '', false, days(3));
+		const physician = createPhysician(1, 'A', '', days(3));
 		expect(canMakeWeekdayUnavailable(physician, 'jeu')).toBe(true);
 		physician.unavailableWeekdays = days(4);
 		expect(canMakeWeekdayUnavailable(physician, 'ven')).toBe(false);
 	});
 
 	it('always allows toggling an already unavailable day', () => {
-		const physician = createPhysician(1, 'A', '', false, days(4));
+		const physician = createPhysician(1, 'A', '', days(4));
 		expect(canMakeWeekdayUnavailable(physician, 'lun')).toBe(true);
 	});
 });
 
 describe('formatting', () => {
 	it('formats preferences in rank order', () => {
-		const physician = createPhysician(1, 'A', '', false, [], { mer: 2, lun: 1, ven: 5 });
+		const physician = createPhysician(1, 'A', '', [], { mer: 2, lun: 1, ven: 5 });
 		expect(formatWeekdayPreferences(physician)).toBe('Lundi (1), Mercredi (2), Vendredi (5)');
 	});
 
 	it('formats preferences Monday-first for CSV', () => {
-		const physician = createPhysician(1, 'A', '', false, [], { ven: 5, lun: 1, mer: 2 });
+		const physician = createPhysician(1, 'A', '', [], { ven: 5, lun: 1, mer: 2 });
 		expect(formatWeekdayPreferencesCsv(physician)).toBe('lun=1,mer=2,ven=5');
 	});
 });

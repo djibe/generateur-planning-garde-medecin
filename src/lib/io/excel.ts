@@ -1,3 +1,4 @@
+import { absenceDaysInYear, formatAbsence, hasAbsence } from '#lib/domain/absence.js';
 import { slotLabel } from '#lib/domain/calendar.js';
 import { CATEGORIES, CATEGORY_LABELS, quotaTotal, quotaMismatches } from '#lib/domain/quotas.js';
 import { computeAllStats, targetDeviation } from '#lib/domain/stats.js';
@@ -135,7 +136,7 @@ export async function exportPhysiciansWorkbook(profile: Profile, slots: Slot[]):
 		{ label: 'Créneaux', value: slots.length }
 	];
 
-	const mismatches = quotaMismatches(physicians, slots);
+	const mismatches = quotaMismatches(physicians, profile.year, slots);
 	for (const mismatch of mismatches) {
 		parameterRows.push({
 			label: `Écart ${mismatch.semester} — ${CATEGORY_LABELS[mismatch.category]}`,
@@ -178,24 +179,20 @@ export async function exportPhysiciansWorkbook(profile: Profile, slots: Slot[]):
 			columns: [
 				{ header: 'Nom', key: 'name', width: 30 },
 				{ header: 'Téléphone', key: 'phone', width: 18 },
-				{ header: 'Exempté', key: 'exempt', width: 10 },
+				{ header: 'Absence du', key: 'absenceFrom', width: 14 },
+				{ header: 'Absence au', key: 'absenceTo', width: 14 },
+				{ header: 'Absence (j)', key: 'absenceDays', width: 12 },
 				{ header: 'Jours indisponibles', key: 'weekdays', width: 24 },
-				{ header: 'Jours préférés', key: 'preferences', width: 28 },
-				{ header: 'Du', key: 'from', width: 12 },
-				{ header: 'Au', key: 'to', width: 12 },
-				{ header: 'Absences', key: 'unavailability', width: 40 }
+				{ header: 'Jours préférés', key: 'preferences', width: 28 }
 			],
 			rows: physicians.map((physician) => ({
 				name: physician.name || 'Sans nom',
 				phone: physician.phone,
-				exempt: physician.exempt ? 'oui' : 'non',
+				absenceFrom: physician.absenceFrom ? formatMedium(physician.absenceFrom) : '',
+				absenceTo: physician.absenceTo ? formatMedium(physician.absenceTo) : '',
+				absenceDays: absenceDaysInYear(physician, profile.year),
 				weekdays: formatUnavailableWeekdays(physician) || '—',
-				preferences: formatWeekdayPreferences(physician) || '—',
-				from: physician.exemptFrom ? formatMedium(physician.exemptFrom) : '',
-				to: physician.exemptTo ? formatMedium(physician.exemptTo) : '',
-				unavailability: physician.unavailability
-					.map((range) => `${formatMedium(range.from)} → ${formatMedium(range.to)}`)
-					.join(' | ')
+				preferences: formatWeekdayPreferences(physician) || '—'
 			}))
 		},
 		quotaSheet('S1'),
@@ -307,6 +304,12 @@ export async function exportDoctorWorkbook(
 	const summaryRows: Record<string, CellValue>[] = [
 		{ label: 'Médecin', value: physician.name || 'Sans nom' },
 		{ label: 'Téléphone', value: physician.phone },
+		{
+			label: 'Absence',
+			value: hasAbsence(physician)
+				? `${formatAbsence(physician)} (${absenceDaysInYear(physician, profile.year)} j)`
+				: '—'
+		},
 		{ label: 'Jours indisponibles', value: formatUnavailableWeekdays(physician) || '—' },
 		{ label: 'Jours préférés', value: formatWeekdayPreferences(physician) || '—' },
 		{ label: 'Secteur', value: profile.area || profile.name },

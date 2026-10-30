@@ -1,6 +1,7 @@
 <script lang="ts">
 	import TypeBadge from '#lib/components/TypeBadge.svelte';
 	import YearCalendar from '#lib/components/YearCalendar.svelte';
+	import { absenceDaysInYear, hasAbsence } from '#lib/domain/absence.js';
 	import { CATEGORIES, CATEGORY_LABELS, emptyQuota } from '#lib/domain/quotas.js';
 	import type { SemesterId, Slot } from '#lib/domain/types.js';
 	import { formatUnavailableWeekdays, formatWeekdayPreferences } from '#lib/domain/weekdays.js';
@@ -108,8 +109,13 @@
 				onclick={() => app.setDoctor(physician.id)}
 			>
 				{physician.name || 'Sans nom'}
-				{#if physician.exempt}
-					<i class="bi bi-slash-circle ms-1" title="Exempté"></i>
+				{#if hasAbsence(physician)}
+					<i
+						class="bi bi-calendar-x ms-1"
+						title={`Absent du ${formatMedium(physician.absenceFrom ?? '')} au ${formatMedium(
+							physician.absenceTo ?? ''
+						)}`}
+					></i>
 				{/if}
 			</button>
 		{/each}
@@ -121,22 +127,24 @@
 				<h2 class="mb-0">{doctor.name || 'Sans nom'}</h2>
 				<div class="section-note">
 					{#if doctor.phone}<i class="bi bi-telephone me-1"></i>{doctor.phone}{/if}
-					{#if doctor.phone && doctor.exempt}
-						·
-					{/if}
-					{#if doctor.exempt}
-						<i class="bi bi-slash-circle me-1"></i>
-						{doctor.exemptFrom || doctor.exemptTo ? 'Exemption partielle' : 'Exempté toute l’année'}
-					{/if}
-					{#if doctor.unavailableWeekdays?.length}
-						{#if doctor.phone || doctor.exempt}
+					{#if hasAbsence(doctor)}
+						{#if doctor.phone}
 							·
 						{/if}
 						<i class="bi bi-calendar-x me-1"></i>
+						Absent du {formatMedium(doctor.absenceFrom ?? '')} au {formatMedium(
+							doctor.absenceTo ?? ''
+						)} ({absenceDaysInYear(doctor, years)} j)
+					{/if}
+					{#if doctor.unavailableWeekdays?.length}
+						{#if doctor.phone || hasAbsence(doctor)}
+							·
+						{/if}
+						<i class="bi bi-calendar-minus me-1"></i>
 						Indispo. {formatUnavailableWeekdays(doctor)}
 					{/if}
 					{#if preferenceSummary}
-						{#if doctor.phone || doctor.exempt || doctor.unavailableWeekdays?.length}
+						{#if doctor.phone || hasAbsence(doctor) || doctor.unavailableWeekdays?.length}
 							·
 						{/if}
 						<i class="bi bi-star me-1"></i>

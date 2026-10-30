@@ -1,3 +1,4 @@
+import { availabilityRatio, isUnavailableInSemester } from './absence';
 import type { Category, Physician, Quota, SemesterId, ShiftTags, Slot } from './types';
 import { weekdayPossibleCategories } from './weekdays';
 
@@ -73,23 +74,36 @@ export function capacityByCategory(slots: Slot[], semester?: SemesterId): Quota 
 	return capacity;
 }
 
-/** A physician is fully exempt when the flag is set without a period. */
-export function isFullyExempt(physician: Physician): boolean {
-	return physician.exempt && !physician.exemptFrom && !physician.exemptTo;
+/** Physicians who still have some availability in the semester. */
+export function activePhysicians(
+	physicians: Physician[],
+	year: number,
+	semester: SemesterId
+): Physician[] {
+	return physicians
+		.filter((physician) => !isUnavailableInSemester(physician, year, semester))
+		.sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
-export function isActivePhysician(physician: Physician): boolean {
-	return !isFullyExempt(physician);
+/** Makes sure a physician has a base target copy (used before absence prorating). */
+function ensureTargetBase(physician: Physician): Record<SemesterId, Quota> {
+	if (!physician.targetBase) {
+		physician.targetBase = {
+			S1: { ...(physician.targets.S1 ?? emptyQuota()) },
+			S2: { ...(physician.targets.S2 ?? emptyQuota()) }
+		};
+	}
+	return physician.targetBase;
 }
 
-export function activePhysicians(physicians: Physician[]): Physician[] {
-	return physicians.filter(isActivePhysician).sort((a, b) => a.sortOrder - b.sortOrder);
-}
-
-export function targetsByCategory(physicians: Physician[], semester: SemesterId): Quota {
+export function targetsByCategory(
+	physicians: Physician[],
+	year: number,
+	semester: SemesterId
+): Quota {
 	const total = emptyQuota();
 	for (const physician of physicians) {
-		if (isFullyExempt(physician)) continue;
+		if (isUnavailableInSemester(physician, year, semester)) continue;
 		for (const category of CATEGORIES) {
 			total[category] += physician.targets[semester]?.[category] ?? 0;
 		}
@@ -125,13 +139,19 @@ export function normalizeToTotal(values: number[], total: number): number[] {
 	return result;
 }
 
+/**
+ * Even split of the category capacity, then prorated by the share of the
+ * semester each physician is available. The base split is kept so the
+ * adjustment can be replayed without compounding the absence reduction.
+ */
 export function averageTargets(
 	physicians: Physician[],
+	year: number,
 	semester: SemesterId,
 	capacity: Quota,
 	slots: Slot[] = []
 ): void {
-	const active = activePhysicians(physicians);
+	const active = activePhysicians(physicians, year, semester);
 	const possible = new Map<string, Set<Category>>();
 	for (const physician of physicians) {
 		possible.set(
@@ -140,34 +160,47 @@ export function averageTargets(
 		);
 	}
 	for (const physician of physicians) {
-		if (isFullyExempt(physician)) {
+		const base = ensureTargetBase(physician);
+		if (isUnavailableInSemester(physician, year, semester)) {
 			physician.targets[semester] = emptyQuota();
+			base[semester] = emptyQuota();
 			continue;
 		}
-		if (slots.length) {
-			for (const category of CATEGORIES) {
-				if (!possible.get(physician.id)?.has(category)) {
-					physician.targets[semester][category] = 0;
-				}
+		base[semester] = { ...(physician.targets[semester] ?? emptyQuota()) };
+		for (const category of CATEGORIES) {
+			if (!possible.get(physician.id)?.has(category)) {
+				physician.targets[semester][category] = 0;
+				base[semester][category] = 0;
 			}
 		}
 	}
 	for (const category of CATEGORIES) {
 		const eligible = active.filter((physician) => possible.get(physician.id)?.has(category));
 		const split = evenSplit(capacity[category], eligible.length);
+		const weights = eligible.map(
+			(physician, index) => split[index] * availabilityRatio(physician, year, semester)
+		);
+		const next = normalizeToTotal(weights, capacity[category]);
 		eligible.forEach((physician, index) => {
-			physician.targets[semester][category] = split[index] ?? 0;
+			ensureTargetBase(physician)[semester][category] = split[index] ?? 0;
+			physician.targets[semester][category] = next[index] ?? 0;
 		});
 	}
 }
 
+/**
+ * Normalises the desired (pre-absence) targets to the available slots, while
+ * reducing each physician by their own availability ratio.
+ */
 export function adjustTargets(
 	physicians: Physician[],
+	year: number,
 	semester: SemesterId,
 	capacity: Quota,
 	slots: Slot[] = []
 ): void {
-	const active = activePhysicians(physicians);
+	const active = activePhysicians(physicians, year, semester);
+	for (const physician of physicians) ensureTargetBase(physician);
 	if (!active.length) return;
 	const possible = new Map<string, Set<Category>>();
 	for (const physician of active) {
@@ -181,11 +214,16 @@ export function adjustTargets(
 		for (const physician of active) {
 			if (!possible.get(physician.id)?.has(category)) {
 				physician.targets[semester][category] = 0;
+				ensureTargetBase(physician)[semester][category] = 0;
 			}
 		}
-		const current = eligible.map((physician) => physician.targets[semester][category] ?? 0);
-		const next = normalizeToTotal(current, capacity[category]);
+		const bases = eligible.map((physician) => ensureTargetBase(physician)[semester][category] ?? 0);
+		const ratios = eligible.map((physician) => availabilityRatio(physician, year, semester));
+		const weightByBase = bases.map((base, index) => base * ratios[index]);
+		const weights = weightByBase.some((value) => value > 0) ? weightByBase : ratios;
+		const next = normalizeToTotal(weights, capacity[category]);
 		eligible.forEach((physician, index) => {
+			ensureTargetBase(physician)[semester][category] = bases[index] ?? 0;
 			physician.targets[semester][category] = next[index] ?? 0;
 		});
 	}
@@ -198,13 +236,19 @@ export interface QuotaMismatch {
 	targets: number;
 }
 
-export function quotaMismatches(physicians: Physician[], slots: Slot[]): QuotaMismatch[] {
+export function quotaMismatches(
+	physicians: Physician[],
+	year: number,
+	slots: Slot[]
+): QuotaMismatch[] {
 	const mismatches: QuotaMismatch[] = [];
-	const active = activePhysicians(physicians);
-	if (!active.length) return mismatches;
+	const hasActive =
+		activePhysicians(physicians, year, 'S1').length > 0 ||
+		activePhysicians(physicians, year, 'S2').length > 0;
+	if (!hasActive) return mismatches;
 	for (const semester of ['S1', 'S2'] as SemesterId[]) {
 		const capacity = capacityByCategory(slots, semester);
-		const targets = targetsByCategory(physicians, semester);
+		const targets = targetsByCategory(physicians, year, semester);
 		for (const category of CATEGORIES) {
 			if (capacity[category] !== targets[category]) {
 				mismatches.push({

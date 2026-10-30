@@ -10,13 +10,6 @@ const quotaSchema = z.object({
 	holiday: z.number().int().min(0).default(0)
 });
 
-const unavailabilitySchema = z.object({
-	id: z.string(),
-	from: z.string(),
-	to: z.string(),
-	reason: z.string().default('')
-});
-
 const weekdayRankSchema = z.number().int().min(1).max(5);
 
 const weekdayPreferencesSchema = z
@@ -33,13 +26,12 @@ const physicianSchema = z.object({
 	id: z.string(),
 	name: z.string().default(''),
 	phone: z.string().default(''),
-	exempt: z.boolean().default(false),
-	exemptFrom: z.string().nullable().default(null),
-	exemptTo: z.string().nullable().default(null),
-	unavailability: z.array(unavailabilitySchema).default([]),
+	absenceFrom: z.string().nullable().default(null),
+	absenceTo: z.string().nullable().default(null),
 	unavailableWeekdays: z.array(z.enum(['lun', 'mar', 'mer', 'jeu', 'ven'])).default([]),
 	weekdayPreferences: weekdayPreferencesSchema,
 	targets: z.object({ S1: quotaSchema, S2: quotaSchema }),
+	targetBase: z.object({ S1: quotaSchema, S2: quotaSchema }).optional(),
 	sortOrder: z.number().int().default(0)
 });
 

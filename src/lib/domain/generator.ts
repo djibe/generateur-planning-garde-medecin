@@ -1,6 +1,7 @@
 import { diffDays } from '../utils/date';
+import { availabilityRatio, isAbsentAllYear, isAbsentOn, isUnavailableInSemester } from './absence';
 import { mulberry32 } from './rng';
-import { CATEGORIES, capacityByCategory, emptyQuota, evenSplit, isFullyExempt } from './quotas';
+import { CATEGORIES, capacityByCategory, emptyQuota, normalizeToTotal } from './quotas';
 import type { Category, Physician, Quota, SemesterId, Slot } from './types';
 import {
 	isSlotBlockedByWeekdays,
@@ -9,6 +10,7 @@ import {
 } from './weekdays';
 
 export interface GenerateOptions {
+	year: number;
 	physicians: Physician[];
 	slots: Slot[];
 	pins: Record<string, string>;
@@ -38,23 +40,12 @@ function slotRank(slot: Slot): number {
 
 export function isAvailable(physician: Physician, slot: Slot): boolean {
 	if (isSlotBlockedByWeekdays(physician, slot)) return false;
-	if (physician.exempt && (physician.exemptFrom || physician.exemptTo)) {
-		for (const date of slot.dates) {
-			const afterStart = !physician.exemptFrom || date >= physician.exemptFrom;
-			const beforeEnd = !physician.exemptTo || date <= physician.exemptTo;
-			if (afterStart && beforeEnd) return false;
-		}
-	}
-	for (const range of physician.unavailability) {
-		for (const date of slot.dates) {
-			if (date >= range.from && date <= range.to) return false;
-		}
-	}
-	return true;
+	return !slot.dates.some((date) => isAbsentOn(physician, date));
 }
 
 function buildTargets(
 	physicians: Physician[],
+	year: number,
 	semester: SemesterId,
 	slots: Slot[]
 ): Map<string, Quota> {
@@ -74,7 +65,8 @@ function buildTargets(
 			0
 		);
 		if (total === 0) {
-			const split = evenSplit(capacity[category], eligible.length);
+			const weights = eligible.map((physician) => availabilityRatio(physician, year, semester));
+			const split = normalizeToTotal(weights, capacity[category]);
 			eligible.forEach((physician, index) => {
 				const target = targets.get(physician.id);
 				if (target) target[category] = split[index] ?? 0;
@@ -86,7 +78,7 @@ function buildTargets(
 
 /**
  * Greedy fill followed by a seeded local search (reassignments + swaps).
- * Hard constraints: exemptions, unavailability, pinned slots.
+ * Hard constraints: absences, unavailable weekdays, pinned slots.
  * Soft objectives: per-category targets, spacing between two shifts, fairness.
  */
 export function generateSchedule(options: GenerateOptions): GenerateResult {
@@ -97,17 +89,15 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 	const warnings: string[] = [];
 	const unassigned: string[] = [];
 
-	const active = physicians
-		.filter((physician) => !isFullyExempt(physician))
+	const available = physicians
+		.filter((physician) => !isAbsentAllYear(physician, options.year))
 		.sort((a, b) => a.sortOrder - b.sortOrder);
 
-	if (!active.length) {
+	if (!available.length) {
 		return {
 			assignments,
 			unassigned: slots.map((slot) => slot.id),
-			warnings: [
-				'Aucun médecin disponible : vérifiez les exemptions, les absences et les jours indisponibles.'
-			],
+			warnings: ['Aucun médecin disponible : vérifiez les absences et les jours indisponibles.'],
 			iterations: 0
 		};
 	}
@@ -117,12 +107,22 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 
 	let totalIterations = 0;
 	let noCandidateCount = 0;
+	let singlePhysicianSemester = false;
 
 	for (const semester of ['S1', 'S2'] as SemesterId[]) {
 		const semesterSlots = bySemester[semester];
 		if (!semesterSlots.length) continue;
 
-		const targets = buildTargets(active, semester, semesterSlots);
+		const active = available.filter(
+			(physician) => !isUnavailableInSemester(physician, options.year, semester)
+		);
+		if (!active.length) {
+			unassigned.push(...semesterSlots.map((slot) => slot.id));
+			continue;
+		}
+		if (active.length === 1) singlePhysicianSemester = true;
+
+		const targets = buildTargets(active, options.year, semester, semesterSlots);
 		const physiciansById = new Map(active.map((physician) => [physician.id, physician]));
 
 		const eligible = new Map<string, string[]>();
@@ -372,7 +372,7 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 
 	if (noCandidateCount > 0) {
 		warnings.push(
-			`${noCandidateCount} créneau(x) n'ont aucun médecin disponible (exemptions, absences ou jours indisponibles).`
+			`${noCandidateCount} créneau(x) n'ont aucun médecin disponible (absences ou jours indisponibles).`
 		);
 	}
 	if (unassigned.length > 0) {
@@ -380,8 +380,8 @@ export function generateSchedule(options: GenerateOptions): GenerateResult {
 			`${unassigned.length} créneau(x) n'ont pas pu être attribués. Vérifiez les objectifs et les disponibilités.`
 		);
 	}
-	if (active.length === 1) {
-		warnings.push('Un seul médecin est disponible : aucune rotation possible.');
+	if (singlePhysicianSemester) {
+		warnings.push('Un seul médecin est disponible sur un semestre : aucune rotation possible.');
 	}
 
 	return { assignments, unassigned, warnings, iterations: totalIterations };

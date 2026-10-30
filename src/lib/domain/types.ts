@@ -38,26 +38,21 @@ export interface Slot {
 	holidayName: string | null;
 }
 
-export interface Unavailability {
-	id: string;
-	from: ISODate;
-	to: ISODate;
-	reason: string;
-}
-
 export interface Physician {
 	id: string;
 	name: string;
 	phone: string;
-	exempt: boolean;
-	exemptFrom: ISODate | null;
-	exemptTo: ISODate | null;
-	unavailability: Unavailability[];
+	/** Single absence period. Both dates null means available all year. */
+	absenceFrom: ISODate | null;
+	absenceTo: ISODate | null;
 	/** Year-round pattern: these weekdays are never assigned, except on public holidays. */
 	unavailableWeekdays: Weekday[];
 	/** Optional Monday–Friday preference ranking. Missing day = neutral. */
 	weekdayPreferences: Partial<Record<Weekday, WeekdayRank>>;
+	/** Effective targets, after the absence prorating. */
 	targets: Record<SemesterId, Quota>;
+	/** Targets desired before absences, used to keep adjustments idempotent. */
+	targetBase?: Record<SemesterId, Quota>;
 	sortOrder: number;
 }
 

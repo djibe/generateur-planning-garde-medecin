@@ -14,21 +14,21 @@ export function createPhysician(
 	sortOrder: number,
 	name = '',
 	phone = '',
-	exempt = false,
 	unavailableWeekdays: Weekday[] = [],
-	weekdayPreferences: Partial<Record<Weekday, WeekdayRank>> = {}
+	weekdayPreferences: Partial<Record<Weekday, WeekdayRank>> = {},
+	absenceFrom: string | null = null,
+	absenceTo: string | null = null
 ): Physician {
 	return {
 		id: uid('phy'),
 		name,
 		phone,
-		exempt,
-		exemptFrom: null,
-		exemptTo: null,
-		unavailability: [],
+		absenceFrom,
+		absenceTo,
 		unavailableWeekdays: [...unavailableWeekdays],
 		weekdayPreferences: { ...weekdayPreferences },
 		targets: { S1: emptyQuota(), S2: emptyQuota() },
+		targetBase: { S1: emptyQuota(), S2: emptyQuota() },
 		sortOrder
 	};
 }
@@ -82,10 +82,8 @@ export function inputSignature(profile: Profile): string {
 			.sort((a, b) => a.sortOrder - b.sortOrder)
 			.map((physician) => ({
 				id: physician.id,
-				exempt: physician.exempt,
-				from: physician.exemptFrom,
-				to: physician.exemptTo,
-				unavailable: physician.unavailability.map((range) => [range.from, range.to]),
+				absenceFrom: physician.absenceFrom,
+				absenceTo: physician.absenceTo,
 				unavailableWeekdays: [...(physician.unavailableWeekdays ?? [])].sort(),
 				weekdayPreferences: Object.fromEntries(
 					Object.entries(physician.weekdayPreferences ?? {}).sort(([left], [right]) =>

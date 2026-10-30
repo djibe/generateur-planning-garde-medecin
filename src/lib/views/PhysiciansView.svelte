@@ -1,14 +1,18 @@
 <script lang="ts">
-	import AvailabilityModal from '#lib/components/AvailabilityModal.svelte';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import CsvImportModal from '#lib/components/CsvImportModal.svelte';
+	import {
+		absenceDaysInSemester,
+		absenceDaysInYear,
+		hasAbsence,
+		isAbsentAllYear
+	} from '#lib/domain/absence.js';
 	import {
 		CATEGORIES,
 		CATEGORY_LABELS,
 		CATEGORY_SHORT,
 		capacityByCategory,
 		emptyQuota,
-		isFullyExempt,
 		quotaTotal,
 		targetsByCategory
 	} from '#lib/domain/quotas.js';
@@ -24,7 +28,6 @@
 
 	let semester = $state<SemesterId>('S1');
 	let csvOpen = $state(false);
-	let availabilityId = $state<string | null>(null);
 	let deletingId = $state<string | null>(null);
 	let exporting = $state(false);
 
@@ -32,7 +35,7 @@
 	const physicians = $derived(profile?.physicians ?? []);
 	const capacity = $derived(capacityByCategory(app.slots, semester));
 	const targets = $derived(
-		profile ? targetsByCategory(profile.physicians, semester) : emptyQuota()
+		profile ? targetsByCategory(profile.physicians, profile.year, semester) : emptyQuota()
 	);
 	const mismatches = $derived(app.mismatches.filter((entry) => entry.semester === semester));
 	const mismatchCategories = $derived(new Set(mismatches.map((entry) => entry.category)));
@@ -58,6 +61,40 @@
 		else if (raw === '') accepted = app.setWeekdayStatus(physician.id, day, null);
 		else accepted = app.setWeekdayStatus(physician.id, day, Number(raw) as WeekdayRank);
 		if (!accepted) select.value = weekdayValue(physician, day);
+	}
+
+	function onAbsenceChange(physician: Physician, field: 'from' | 'to', event: Event) {
+		const value = (event.currentTarget as HTMLInputElement).value || null;
+		let from = physician.absenceFrom;
+		let to = physician.absenceTo;
+		if (field === 'from') {
+			from = value;
+			if (!value) to = null;
+			else if (!to) to = value;
+		} else {
+			to = value;
+			if (!value) from = null;
+			else if (!from) from = value;
+		}
+		app.setAbsence(physician.id, from, to);
+	}
+
+	function absenceDays(physician: Physician): number {
+		if (!profile) return 0;
+		return absenceDaysInYear(physician, profile.year);
+	}
+
+	function semesterAbsenceDays(physician: Physician): number {
+		if (!profile) return 0;
+		return absenceDaysInSemester(physician, profile.year, semester);
+	}
+
+	function invalidAbsence(physician: Physician): boolean {
+		return (
+			!!physician.absenceFrom &&
+			!!physician.absenceTo &&
+			physician.absenceFrom > physician.absenceTo
+		);
 	}
 
 	async function exportExcel() {
@@ -202,7 +239,8 @@
 								<th style="width: 4.5rem">#</th>
 								<th>Nom</th>
 								<th>Téléphone</th>
-								<th style="width: 6rem">Exempté</th>
+								<th style="width: 9rem" title="Premier jour d’absence">Exempté du</th>
+								<th style="width: 9rem" title="Dernier jour d’absence">au</th>
 								{#each WEEKDAYS as day (day)}
 									<th
 										style="width: 5.4rem"
@@ -217,7 +255,7 @@
 						</thead>
 						<tbody>
 							{#each physicians as physician, index (physician.id)}
-								<tr class:row-exempt={isFullyExempt(physician)}>
+								<tr class:row-absent={isAbsentAllYear(physician, profile.year)}>
 									<td class="text-nowrap">
 										<span class="text-secondary mono me-1">{index + 1}</span>
 										<button
@@ -253,6 +291,14 @@
 												title="Maximum 4 jours indisponibles : rendez au moins un jour disponible."
 											></i>
 										{/if}
+										{#if hasAbsence(physician)}
+											<span
+												class="badge text-bg-light ms-1"
+												title={`${absenceDays(physician)} jour(s) d’absence sur l’année`}
+											>
+												{absenceDays(physician)} j
+											</span>
+										{/if}
 									</td>
 									<td>
 										<input
@@ -264,18 +310,24 @@
 										/>
 									</td>
 									<td>
-										<div class="form-check form-switch mb-0">
-											<input
-												class="form-check-input"
-												type="checkbox"
-												id={`exempt-${physician.id}`}
-												bind:checked={physician.exempt}
-												aria-label="Médecin exempté"
-											/>
-											<label class="form-check-label small" for={`exempt-${physician.id}`}>
-												{physician.exempt ? 'Oui' : 'Non'}
-											</label>
-										</div>
+										<input
+											type="date"
+											class="form-control form-control-sm"
+											class:is-invalid={invalidAbsence(physician)}
+											value={physician.absenceFrom ?? ''}
+											aria-label={`Absence du — ${physician.name || 'sans nom'}`}
+											oninput={(event) => onAbsenceChange(physician, 'from', event)}
+										/>
+									</td>
+									<td>
+										<input
+											type="date"
+											class="form-control form-control-sm"
+											class:is-invalid={invalidAbsence(physician)}
+											value={physician.absenceTo ?? ''}
+											aria-label={`Absence au — ${physician.name || 'sans nom'}`}
+											oninput={(event) => onAbsenceChange(physician, 'to', event)}
+										/>
 									</td>
 									{#each WEEKDAYS as day (day)}
 										<td class="text-center">
@@ -294,14 +346,16 @@
 										</td>
 									{/each}
 									<td class="text-end text-nowrap">
-										<button
-											type="button"
-											class="btn btn-sm btn-outline-secondary"
-											title="Disponibilités et absences"
-											onclick={() => (availabilityId = physician.id)}
-										>
-											<i class="bi bi-calendar-x"></i>
-										</button>
+										{#if hasAbsence(physician)}
+											<button
+												type="button"
+												class="btn btn-sm btn-outline-secondary"
+												title="Effacer l’absence"
+												onclick={() => app.clearAbsence(physician.id)}
+											>
+												<i class="bi bi-calendar-x"></i>
+											</button>
+										{/if}
 										<button
 											type="button"
 											class="btn btn-sm btn-outline-danger ms-1"
@@ -316,10 +370,11 @@
 						</tbody>
 					</table>
 				</div>
-				<div class="form-text px-1">
-					Chaque jour : <strong>—</strong> disponible sans préférence, <strong>Indispo</strong>
-					jamais ce jour (maximum 4 jours), <strong>1</strong> jour préféré … <strong>5</strong> moins
-					préféré. Les jours fériés restent disponibles.
+				<div class="app-card-foot small text-secondary">
+					<strong>Absent du / au</strong> : période d’absence unique, vide si le médecin est
+					disponible toute l’année. Chaque jour : <strong>—</strong> disponible sans préférence,
+					<strong>Indispo</strong> jamais ce jour (maximum 4 jours), <strong>1</strong> jour préféré
+					… <strong>5</strong> moins préféré.
 				</div>
 			{/if}
 		</div>
@@ -351,7 +406,7 @@
 					<button
 						type="button"
 						class="btn btn-sm btn-outline-secondary"
-						title="Répartir équitablement entre les médecins disponibles"
+						title="Répartir au prorata de la disponibilité (absences déduites)"
 						onclick={() => app.applyAverageTargets(semester)}
 					>
 						<i class="bi bi-magic me-1"></i> Répartition équitable
@@ -359,7 +414,7 @@
 					<button
 						type="button"
 						class="btn btn-sm btn-outline-secondary"
-						title="Ajuster les objectifs actuels au nombre de créneaux"
+						title="Ajuster les objectifs actuels aux créneaux, absences déduites"
 						onclick={() => app.adjustTargetsToCapacity(semester)}
 					>
 						<i class="bi bi-rulers me-1"></i> Ajuster aux créneaux
@@ -373,22 +428,28 @@
 						<thead>
 							<tr>
 								<th>Médecin</th>
+								<th class="text-center" title="Jours d’absence pris en compte dans le prorata"
+									>Absence</th
+								>
 								{#each CATEGORIES as category (category)}
 									<th class="text-center" title={CATEGORY_LABELS[category]}
 										>{CATEGORY_SHORT[category]}</th
 									>
 								{/each}
-								<th class="text-center">Total</th>
+								<th class="text-center">Jours dus</th>
 							</tr>
 						</thead>
 						<tbody>
 							{#each physicians as physician (physician.id)}
-								<tr class:row-exempt={isFullyExempt(physician)}>
+								<tr class:row-absent={isAbsentAllYear(physician, profile.year)}>
 									<td class="text-nowrap">
 										{physician.name || 'Sans nom'}
-										{#if isFullyExempt(physician)}
-											<span class="badge text-bg-secondary ms-1">exempté</span>
+										{#if isAbsentAllYear(physician, profile.year)}
+											<span class="badge text-bg-secondary ms-1">absent</span>
 										{/if}
+									</td>
+									<td class="text-center mono small" title="Jours d’absence sur le semestre">
+										{semesterAbsenceDays(physician)}
 									</td>
 									{#each CATEGORIES as category (category)}
 										<td class="text-center">
@@ -412,6 +473,7 @@
 						<tfoot>
 							<tr>
 								<th>Objectifs</th>
+								<td></td>
 								{#each CATEGORIES as category (category)}
 									<td
 										class="text-center mono"
@@ -424,6 +486,7 @@
 							</tr>
 							<tr>
 								<th>Jours disponibles</th>
+								<td></td>
 								{#each CATEGORIES as category (category)}
 									<td class="text-center mono">{capacity[category]}</td>
 								{/each}
@@ -435,8 +498,9 @@
 			</div>
 			<div class="app-card-foot small text-secondary">
 				Les objectifs sont indicatifs : le générateur cherche à s’en approcher tout en espaçant les
-				gardes. Un jour férié tombant un vendredi, samedi ou dimanche est compté dans sa catégorie
-				de week-end et dans « Férié ».
+				gardes. « Répartition équitable » et « Ajuster aux créneaux » réduisent les jours dus au
+				prorata de la durée d’absence dans le semestre. Un jour férié tombant un vendredi, samedi ou
+				dimanche est compté dans sa catégorie de week-end et dans « Férié ».
 			</div>
 		</section>
 	{/if}
@@ -472,10 +536,6 @@
 
 {#if csvOpen}
 	<CsvImportModal onclose={() => (csvOpen = false)} />
-{/if}
-
-{#if availabilityId}
-	<AvailabilityModal physicianId={availabilityId} onclose={() => (availabilityId = null)} />
 {/if}
 
 {#if deletingId}

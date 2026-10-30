@@ -62,19 +62,20 @@ describe('capacity and targets', () => {
 		expect(quotaTotal(capacity)).toBe(3);
 	});
 
-	it('ignores fully exempt physicians in the targets', () => {
+	it('ignores physicians absent all year in the targets', () => {
 		const first = createPhysician(1, 'A');
 		const second = createPhysician(2, 'B');
 		first.targets.S1.weekday = 4;
 		second.targets.S1.weekday = 6;
-		second.exempt = true;
-		expect(targetsByCategory([first, second], 'S1').weekday).toBe(4);
+		second.absenceFrom = '2026-01-01';
+		second.absenceTo = '2026-12-31';
+		expect(targetsByCategory([first, second], 2026, 'S1').weekday).toBe(4);
 	});
 
 	it('reports mismatches between capacity and targets', () => {
 		const physician = createPhysician(1, 'A');
 		physician.targets.S1.weekday = 3;
-		const mismatches = quotaMismatches([physician], [slot({ weekday: 1 })]);
+		const mismatches = quotaMismatches([physician], 2026, [slot({ weekday: 1 })]);
 		expect(mismatches.some((mismatch) => mismatch.category === 'weekday')).toBe(true);
 		expect(mismatches.find((mismatch) => mismatch.category === 'weekday')?.capacity).toBe(1);
 	});
@@ -115,8 +116,8 @@ describe('targets and weekday restrictions', () => {
 
 	it('gives no target in a category the physician can never work', () => {
 		const free = createPhysician(1, 'Libre');
-		const noFriday = createPhysician(2, 'Sans vendredi', '', false, ['ven']);
-		averageTargets([free, noFriday], 'S1', capacityByCategory(slots, 'S1'), slots);
+		const noFriday = createPhysician(2, 'Sans vendredi', '', ['ven']);
+		averageTargets([free, noFriday], 2026, 'S1', capacityByCategory(slots, 'S1'), slots);
 		expect(noFriday.targets.S1.friday).toBe(0);
 		expect(free.targets.S1.friday).toBe(1);
 		expect(noFriday.targets.S1.weekday + free.targets.S1.weekday).toBe(1);
@@ -126,19 +127,64 @@ describe('targets and weekday restrictions', () => {
 	it('zeroes the impossible target when adjusting existing values', () => {
 		const free = createPhysician(1, 'Libre');
 		free.targets.S1.friday = 2;
-		const noFriday = createPhysician(2, 'Sans vendredi', '', false, ['ven']);
+		const noFriday = createPhysician(2, 'Sans vendredi', '', ['ven']);
 		noFriday.targets.S1.friday = 5;
 		const fridayOnly = [datedSlot('2026-05-15', 'friday', { friday: 3 })];
-		adjustTargets([free, noFriday], 'S1', capacityByCategory(fridayOnly, 'S1'), fridayOnly);
+		adjustTargets([free, noFriday], 2026, 'S1', capacityByCategory(fridayOnly, 'S1'), fridayOnly);
 		expect(noFriday.targets.S1.friday).toBe(0);
 		expect(free.targets.S1.friday).toBe(3);
 	});
 
 	it('keeps every category when no weekday is restricted', () => {
 		const free = createPhysician(1, 'Libre');
-		averageTargets([free], 'S1', capacityByCategory(slots, 'S1'), slots);
+		averageTargets([free], 2026, 'S1', capacityByCategory(slots, 'S1'), slots);
 		expect(free.targets.S1.weekday).toBe(1);
 		expect(free.targets.S1.friday).toBe(1);
 		expect(free.targets.S1.saturday).toBe(1);
+	});
+
+	it('prorates the targets by the absence duration in the semester', () => {
+		const full = createPhysician(1, 'Disponible');
+		const half = createPhysician(2, 'Absent');
+		half.absenceFrom = '2026-01-01';
+		half.absenceTo = '2026-03-31';
+		const weekdaySlots = [datedSlot('2026-05-04', 'weekday', { weekday: 10 })];
+		averageTargets([full, half], 2026, 'S1', capacityByCategory(weekdaySlots, 'S1'), weekdaySlots);
+		expect(full.targets.S1.weekday + half.targets.S1.weekday).toBe(10);
+		expect(full.targets.S1.weekday).toBeGreaterThan(half.targets.S1.weekday);
+		expect(half.targets.S1.weekday).toBe(3);
+	});
+
+	it('gives no target at all to a physician absent during the whole semester', () => {
+		const full = createPhysician(1, 'Disponible');
+		const absent = createPhysician(2, 'Absent');
+		absent.absenceFrom = '2026-01-01';
+		absent.absenceTo = '2026-06-30';
+		const weekdaySlots = [datedSlot('2026-05-04', 'weekday', { weekday: 10 })];
+		averageTargets(
+			[full, absent],
+			2026,
+			'S1',
+			capacityByCategory(weekdaySlots, 'S1'),
+			weekdaySlots
+		);
+		expect(absent.targets.S1.weekday).toBe(0);
+		expect(full.targets.S1.weekday).toBe(10);
+	});
+
+	it('keeps the adjustment idempotent', () => {
+		const full = createPhysician(1, 'Disponible');
+		const half = createPhysician(2, 'Absent');
+		half.absenceFrom = '2026-01-01';
+		half.absenceTo = '2026-03-31';
+		full.targets.S1.weekday = 5;
+		full.targetBase!.S1.weekday = 5;
+		half.targets.S1.weekday = 5;
+		half.targetBase!.S1.weekday = 5;
+		const weekdaySlots = [datedSlot('2026-05-04', 'weekday', { weekday: 10 })];
+		adjustTargets([full, half], 2026, 'S1', capacityByCategory(weekdaySlots, 'S1'), weekdaySlots);
+		const first = [full.targets.S1.weekday, half.targets.S1.weekday];
+		adjustTargets([full, half], 2026, 'S1', capacityByCategory(weekdaySlots, 'S1'), weekdaySlots);
+		expect([full.targets.S1.weekday, half.targets.S1.weekday]).toEqual(first);
 	});
 });

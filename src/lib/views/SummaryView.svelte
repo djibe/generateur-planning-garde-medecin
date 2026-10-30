@@ -1,10 +1,6 @@
 <script lang="ts">
-	import {
-		CATEGORIES,
-		CATEGORY_LABELS,
-		CATEGORY_SHORT,
-		isFullyExempt
-	} from '#lib/domain/quotas.js';
+	import { isAbsentAllYear } from '#lib/domain/absence.js';
+	import { CATEGORIES, CATEGORY_LABELS, CATEGORY_SHORT } from '#lib/domain/quotas.js';
 	import { targetDeviation } from '#lib/domain/stats.js';
 	import type { Category, Physician, SemesterId } from '#lib/domain/types.js';
 	import { exportSummaryWorkbook } from '#lib/io/excel.js';
@@ -17,15 +13,16 @@
 		[...(profile?.physicians ?? [])].sort((left, right) => left.sortOrder - right.sortOrder)
 	);
 	const statsById = $derived(app.statsById);
+	const availablePhysicians = $derived(
+		profile ? physicians.filter((physician) => !isAbsentAllYear(physician, profile.year)) : []
+	);
 
 	const assignedSlots = $derived(app.slots.filter((slot) => app.assignmentOf(slot)).length);
 	const totalDays = $derived(
 		app.slots.reduce((sum, slot) => sum + (app.assignmentOf(slot) ? slot.dates.length : 0), 0)
 	);
 	const daysPerPhysician = $derived(
-		physicians
-			.filter((physician) => !isFullyExempt(physician))
-			.map((physician) => statsById.get(physician.id)?.year.days ?? 0)
+		availablePhysicians.map((physician) => statsById.get(physician.id)?.year.days ?? 0)
 	);
 	const minDays = $derived(daysPerPhysician.length ? Math.min(...daysPerPhysician) : 0);
 	const maxDays = $derived(daysPerPhysician.length ? Math.max(...daysPerPhysician) : 0);
@@ -35,9 +32,7 @@
 			: 0
 	);
 	const targetAverage = $derived(
-		physicians.filter((physician) => !isFullyExempt(physician)).length
-			? totalDays / physicians.filter((physician) => !isFullyExempt(physician)).length
-			: 0
+		availablePhysicians.length ? totalDays / availablePhysicians.length : 0
 	);
 
 	function balanceClass(days: number): string {
@@ -193,7 +188,7 @@
 								{#each physicians as physician (physician.id)}
 									{@const entry = bucket(physician.id, semester)}
 									{@const offset = deviation(physician, semester)}
-									<tr class:row-exempt={physician.exempt}>
+									<tr class:row-absent={profile && isAbsentAllYear(physician, profile.year)}>
 										<td class="fw-medium text-nowrap">{physician.name || 'Sans nom'}</td>
 										<td class="text-center fw-semibold mono">{entry?.days ?? 0}</td>
 										{#each CATEGORIES as category (category)}
@@ -255,7 +250,7 @@
 								{@const entry = statsById.get(physician.id)}
 								{@const days = entry?.year.days ?? 0}
 								{@const offset = deviation(physician, 'year')}
-								<tr class:row-exempt={physician.exempt}>
+								<tr class:row-absent={profile && isAbsentAllYear(physician, profile.year)}>
 									<td class="fw-medium text-nowrap">{physician.name || 'Sans nom'}</td>
 									<td class="text-center fw-semibold mono">{days}</td>
 									<td class="text-center mono">{entry?.year.shifts ?? 0}</td>

@@ -9,17 +9,21 @@ import {
 export interface CsvPhysician {
 	name: string;
 	phone: string;
-	exempt: boolean;
+	absenceFrom: string | null;
+	absenceTo: string | null;
 	unavailableWeekdays: Weekday[];
 	weekdayPreferences: Partial<Record<Weekday, WeekdayRank>>;
 	/** Tokens that were not recognised, reported in the import preview. */
 	invalidWeekdays: string[];
 	invalidPreferences: string[];
+	invalidAbsence: string[];
 }
 
-const EXEMPT_VALUES = new Set(['oui', 'yes', 'true', '1', 'x', 'exempt', 'exempte', 'exemptee']);
-
 const WEEKDAY_VALUES = new Set<string>(WEEKDAYS);
+
+const ABSENCE_FROM_HEADERS = ['absence du', 'absence de', 'absent du', 'absence from', 'from'];
+
+const ABSENCE_TO_HEADERS = ['absence au', 'absent au', 'absence to', 'to'];
 
 const DAY_HEADERS = [
 	'jours indisponibles',
@@ -63,6 +67,40 @@ function normalize(value: string): string {
 		.replace(/[\u0300-\u036f]/g, '')
 		.trim()
 		.toLowerCase();
+}
+
+function validIsoDate(value: string): string | null {
+	const clean = value.trim();
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return null;
+	const [year, month, day] = clean.split('-').map(Number);
+	const date = new Date(Date.UTC(year, month - 1, day));
+	if (
+		date.getUTCFullYear() !== year ||
+		date.getUTCMonth() !== month - 1 ||
+		date.getUTCDate() !== day
+	) {
+		return null;
+	}
+	return clean;
+}
+
+function parseAbsence(
+	fromRaw: string,
+	toRaw: string
+): { from: string | null; to: string | null; invalid: string[] } {
+	const fromValue = fromRaw.trim();
+	const toValue = toRaw.trim();
+	if (!fromValue && !toValue) return { from: null, to: null, invalid: [] };
+	const from = validIsoDate(fromValue);
+	const to = validIsoDate(toValue);
+	if (!from || !to || from > to) {
+		return {
+			from: null,
+			to: null,
+			invalid: [fromValue, toValue].filter((value) => value !== '')
+		};
+	}
+	return { from, to, invalid: [] };
 }
 
 /** Splits a cell into bare day codes and `day=rank` pairs. */
@@ -204,7 +242,7 @@ function parseRows(text: string, delimiter: string): string[][] {
 	return rows;
 }
 
-/** Imports `Nom;Téléphone;Exempté;Jours indisponibles;Jours préférés` (header optional). */
+/** Imports `Nom;Téléphone;Absence du;Absence au;Jours indisponibles;Jours préférés`. */
 export function parseCsv(text: string): CsvPhysician[] {
 	const clean = text
 		.replace(/^\uFEFF/, '')
@@ -231,20 +269,21 @@ export function parseCsv(text: string): CsvPhysician[] {
 
 	let nameIndex = 0;
 	let phoneIndex = 1;
-	let exemptIndex = 2;
-	let dayIndex: number | null = start === 0 ? 3 : null;
-	let preferenceIndex: number | null = start === 0 ? 4 : null;
+	let absenceFromIndex: number | null = start === 0 ? 2 : null;
+	let absenceToIndex: number | null = start === 0 ? 3 : null;
+	let dayIndex: number | null = start === 0 ? 4 : null;
+	let preferenceIndex: number | null = start === 0 ? 5 : null;
 	if (start === 1) {
 		const phoneColumn = header.findIndex((cell) =>
 			['telephone', 'tel', 'phone', 'portable', 'mobile'].includes(cell)
 		);
-		const exemptColumn = header.findIndex((cell) =>
-			['exempte', 'exempt', 'exemption'].includes(cell)
-		);
+		const absenceFromColumn = header.findIndex((cell) => ABSENCE_FROM_HEADERS.includes(cell));
+		const absenceToColumn = header.findIndex((cell) => ABSENCE_TO_HEADERS.includes(cell));
 		const dayColumn = header.findIndex((cell) => DAY_HEADERS.includes(cell));
 		const preferenceColumn = header.findIndex((cell) => PREFERENCE_HEADERS.includes(cell));
 		if (phoneColumn >= 0) phoneIndex = phoneColumn;
-		if (exemptColumn >= 0) exemptIndex = exemptColumn;
+		if (absenceFromColumn >= 0) absenceFromIndex = absenceFromColumn;
+		if (absenceToColumn >= 0) absenceToIndex = absenceToColumn;
 		if (dayColumn >= 0) dayIndex = dayColumn;
 		if (preferenceColumn >= 0) preferenceIndex = preferenceColumn;
 	}
@@ -268,7 +307,10 @@ export function parseCsv(text: string): CsvPhysician[] {
 		const name = (row[nameIndex] ?? '').trim();
 		if (!name) continue;
 		const phone = (row[phoneIndex] ?? '').trim();
-		const exempt = EXEMPT_VALUES.has(normalize(row[exemptIndex] ?? ''));
+		const absence = parseAbsence(
+			absenceFromIndex !== null ? (row[absenceFromIndex] ?? '') : '',
+			absenceToIndex !== null ? (row[absenceToIndex] ?? '') : ''
+		);
 
 		let raw: RawWeekdaySelection;
 		if (listsAtTail && listStart >= 0) {
@@ -298,24 +340,28 @@ export function parseCsv(text: string): CsvPhysician[] {
 		result.push({
 			name,
 			phone,
-			exempt,
+			absenceFrom: absence.from,
+			absenceTo: absence.to,
 			unavailableWeekdays: parsed.weekdays,
 			weekdayPreferences: parsed.weekdayPreferences,
 			invalidWeekdays: parsed.invalidWeekdays,
-			invalidPreferences: parsed.invalidPreferences
+			invalidPreferences: parsed.invalidPreferences,
+			invalidAbsence: absence.invalid
 		});
 	}
 	return result;
 }
 
 export function toCsv(physicians: Physician[]): string {
-	const lines = ['Nom;Téléphone;Exempté;Jours indisponibles;Jours préférés'];
+	const lines = ['Nom;Téléphone;Absence du;Absence au;Jours indisponibles;Jours préférés'];
 	for (const physician of [...physicians].sort((a, b) => a.sortOrder - b.sortOrder)) {
 		const name = physician.name.replace(/;/g, ',');
 		const phone = physician.phone.replace(/;/g, ',');
 		const weekdays = sortedWeekdays(physician.unavailableWeekdays ?? []).join(',');
 		const preferences = formatWeekdayPreferencesCsv(physician);
-		lines.push(`${name};${phone};${physician.exempt ? 'oui' : 'non'};${weekdays};${preferences}`);
+		const from = physician.absenceFrom ?? '';
+		const to = physician.absenceTo ?? '';
+		lines.push(`${name};${phone};${from};${to};${weekdays};${preferences}`);
 	}
 	return lines.join('\r\n');
 }

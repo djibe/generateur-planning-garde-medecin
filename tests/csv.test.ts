@@ -59,37 +59,51 @@ describe('parseWeekdayPreferences', () => {
 describe('parseCsv', () => {
 	it('parses the documented format with a header', () => {
 		const rows = parseCsv(
-			'Nom;Téléphone;Exempté;Jours indisponibles;Jours préférés\nDr Alice Martin;06 12 34 56 78;non;lun,mer;mar=1,jeu=2\nDr Benoît Petit;06 98 76 54 32;oui;;ven=1'
+			'Nom;Téléphone;Absence du;Absence au;Jours indisponibles;Jours préférés\nDr Alice Martin;06 12 34 56 78;2026-03-01;2026-03-31;lun,mer;mar=1,jeu=2\nDr Benoît Petit;06 98 76 54 32;;;;ven=1'
 		);
 		expect(rows).toEqual([
 			{
 				name: 'Dr Alice Martin',
 				phone: '06 12 34 56 78',
-				exempt: false,
+				absenceFrom: '2026-03-01',
+				absenceTo: '2026-03-31',
 				unavailableWeekdays: ['lun', 'mer'],
 				weekdayPreferences: { mar: 1, jeu: 2 },
 				invalidWeekdays: [],
-				invalidPreferences: []
+				invalidPreferences: [],
+				invalidAbsence: []
 			},
 			{
 				name: 'Dr Benoît Petit',
 				phone: '06 98 76 54 32',
-				exempt: true,
+				absenceFrom: null,
+				absenceTo: null,
 				unavailableWeekdays: [],
 				weekdayPreferences: { ven: 1 },
 				invalidWeekdays: [],
-				invalidPreferences: []
+				invalidPreferences: [],
+				invalidAbsence: []
 			}
 		]);
 	});
 
-	it('accepts a file without header and reads the optional 4th and 5th columns', () => {
-		const rows = parseCsv('Dr A;0601;;lun,mer;mar=1\nDr B;0602');
+	it('accepts a file without header and reads the optional columns', () => {
+		const rows = parseCsv('Dr A;0601;;;lun,mer;mar=1\nDr B;0602');
 		expect(rows).toHaveLength(2);
+		expect(rows[0].absenceFrom).toBeNull();
 		expect(rows[0].unavailableWeekdays).toEqual(['lun', 'mer']);
 		expect(rows[0].weekdayPreferences).toEqual({ mar: 1 });
 		expect(rows[1].unavailableWeekdays).toEqual([]);
 		expect(rows[1].weekdayPreferences).toEqual({});
+	});
+
+	it('reads absence dates from the header', () => {
+		const [row] = parseCsv(
+			'Nom;Téléphone;Absence du;Absence au;Jours indisponibles;Jours préférés\nDr A;0601;2026-05-01;2026-05-20;;'
+		);
+		expect(row.absenceFrom).toBe('2026-05-01');
+		expect(row.absenceTo).toBe('2026-05-20');
+		expect(row.invalidAbsence).toEqual([]);
 	});
 
 	it('finds the day and preference columns through header synonyms', () => {
@@ -107,7 +121,7 @@ describe('parseCsv', () => {
 
 	it('keeps valid values and reports unknown tokens', () => {
 		const rows = parseCsv(
-			'Nom;Téléphone;Exempté;Jours indisponibles;Jours préférés\nDr A;0601;non;lun,sam;mer=1,dim=2'
+			'Nom;Téléphone;Absence du;Absence au;Jours indisponibles;Jours préférés\nDr A;0601;;;lun,sam;mer=1,dim=2'
 		);
 		expect(rows[0].unavailableWeekdays).toEqual(['lun']);
 		expect(rows[0].weekdayPreferences).toEqual({ mer: 1 });
@@ -115,9 +129,16 @@ describe('parseCsv', () => {
 		expect(rows[0].invalidPreferences).toEqual(['dim=2']);
 	});
 
+	it('reports invalid or incomplete absence dates', () => {
+		const [row] = parseCsv('Nom;Téléphone;Absence du;Absence au\nDr A;0601;oui;2026-02-30');
+		expect(row.absenceFrom).toBeNull();
+		expect(row.absenceTo).toBeNull();
+		expect(row.invalidAbsence).toEqual(['oui', '2026-02-30']);
+	});
+
 	it('limits unavailability to 4 days and drops preferences on unavailable days', () => {
 		const rows = parseCsv(
-			'Nom;Téléphone;Exempté;Jours indisponibles;Jours préférés\nDr A;0601;non;lun,mar,mer,jeu,ven;lun=1,ven=2'
+			'Nom;Téléphone;Absence du;Absence au;Jours indisponibles;Jours préférés\nDr A;0601;;;lun,mar,mer,jeu,ven;lun=1,ven=2'
 		);
 		expect(rows[0].unavailableWeekdays).toEqual(['lun', 'mar', 'mer', 'jeu']);
 		// Friday is freed by the max-4 rule, so its preference becomes valid.
@@ -129,20 +150,15 @@ describe('parseCsv', () => {
 	it('rejoins day lists containing the file delimiter', () => {
 		expect(
 			parseCsv(
-				'Nom,Téléphone,Exempté,Jours indisponibles,Jours préférés\nDr A,0601,non,lun,mer,mar=1'
+				'Nom,Téléphone,Absence du,Absence au,Jours indisponibles,Jours préférés\nDr A,0601,,,,lun,mer,mar=1'
 			)[0].unavailableWeekdays
 		).toEqual(['lun', 'mer']);
 		expect(
 			parseCsv(
-				'Nom,Téléphone,Exempté,Jours indisponibles,Jours préférés\nDr A,0601,non,lun,mer,mar=1'
+				'Nom,Téléphone,Absence du,Absence au,Jours indisponibles,Jours préférés\nDr A,0601,,,,lun,mer,mar=1'
 			)[0].weekdayPreferences
 		).toEqual({ mar: 1 });
-		expect(
-			parseCsv(
-				'Nom;Téléphone;Exempté;Jours indisponibles;Jours préférés\nDr A;0601;non;lun;mer;mar=1'
-			)[0].unavailableWeekdays
-		).toEqual(['lun', 'mer']);
-		expect(parseCsv('Dr A;0601;;lun;mer')[0].unavailableWeekdays).toEqual(['lun', 'mer']);
+		expect(parseCsv('Dr A;0601;;;lun;mer')[0].unavailableWeekdays).toEqual(['lun', 'mer']);
 	});
 
 	it('detects commas and tabs', () => {
@@ -151,15 +167,17 @@ describe('parseCsv', () => {
 	});
 
 	it('handles quoted values containing the delimiter', () => {
-		const rows = parseCsv('"Dr; A";"06;01";oui');
+		const rows = parseCsv('"Dr; A";"06;01";2026-01-01;2026-01-31');
 		expect(rows[0]).toEqual({
 			name: 'Dr; A',
 			phone: '06;01',
-			exempt: true,
+			absenceFrom: '2026-01-01',
+			absenceTo: '2026-01-31',
 			unavailableWeekdays: [],
 			weekdayPreferences: {},
 			invalidWeekdays: [],
-			invalidPreferences: []
+			invalidPreferences: [],
+			invalidAbsence: []
 		});
 	});
 
@@ -175,29 +193,43 @@ describe('parseCsv', () => {
 
 describe('toCsv', () => {
 	it('writes a round-trippable export', () => {
-		const first = createPhysician(1, 'Dr A', '0601', false, ['mer', 'lun'], { mar: 1, jeu: 2 });
-		const second = createPhysician(2, 'Dr B', '0602', true);
+		const first = createPhysician(
+			1,
+			'Dr A',
+			'0601',
+			['mer', 'lun'],
+			{ mar: 1, jeu: 2 },
+			'2026-02-01',
+			'2026-02-28'
+		);
+		const second = createPhysician(2, 'Dr B', '0602');
 		const csv = toCsv([second, first]);
-		expect(csv.split('\r\n')[0]).toBe('Nom;Téléphone;Exempté;Jours indisponibles;Jours préférés');
+		expect(csv.split('\r\n')[0]).toBe(
+			'Nom;Téléphone;Absence du;Absence au;Jours indisponibles;Jours préférés'
+		);
 		const parsed = parseCsv(csv);
 		expect(parsed).toEqual([
 			{
 				name: 'Dr A',
 				phone: '0601',
-				exempt: false,
+				absenceFrom: '2026-02-01',
+				absenceTo: '2026-02-28',
 				unavailableWeekdays: ['lun', 'mer'],
 				weekdayPreferences: { mar: 1, jeu: 2 },
 				invalidWeekdays: [],
-				invalidPreferences: []
+				invalidPreferences: [],
+				invalidAbsence: []
 			},
 			{
 				name: 'Dr B',
 				phone: '0602',
-				exempt: true,
+				absenceFrom: null,
+				absenceTo: null,
 				unavailableWeekdays: [],
 				weekdayPreferences: {},
 				invalidWeekdays: [],
-				invalidPreferences: []
+				invalidPreferences: [],
+				invalidAbsence: []
 			}
 		]);
 	});

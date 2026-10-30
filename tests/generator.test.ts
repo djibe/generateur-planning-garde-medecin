@@ -12,8 +12,8 @@ function makeProfile(count = 12, mode: WeekendMode = 'combined'): Profile {
 	const physicians = Array.from({ length: count }, (_, index) =>
 		createPhysician(index + 1, `Médecin ${index + 1}`, `06000000${index}`)
 	);
-	averageTargets(physicians, 'S1', capacityByCategory(slots, 'S1'));
-	averageTargets(physicians, 'S2', capacityByCategory(slots, 'S2'));
+	averageTargets(physicians, 2026, 'S1', capacityByCategory(slots, 'S1'));
+	averageTargets(physicians, 2026, 'S2', capacityByCategory(slots, 'S2'));
 	return {
 		schemaVersion: 1,
 		id: 'test-profile',
@@ -47,6 +47,7 @@ describe('generateSchedule', () => {
 		const profile = makeProfile();
 		const slots = buildSlots(2026, 'combined');
 		const result = generateSchedule({
+			year: 2026,
 			physicians: profile.physicians,
 			slots,
 			pins: {},
@@ -59,32 +60,41 @@ describe('generateSchedule', () => {
 	it('is deterministic for a given seed', () => {
 		const profile = makeProfile(8);
 		const slots = buildSlots(2026, 'combined');
-		const options = { physicians: profile.physicians, slots, pins: {}, seed: 1234 };
+		const options = { year: 2026, physicians: profile.physicians, slots, pins: {}, seed: 1234 };
 		const first = generateSchedule(options);
 		const second = generateSchedule(options);
 		expect(first.assignments).toEqual(second.assignments);
 	});
 
-	it('never assigns a fully exempt physician', () => {
+	it('never assigns a physician absent all year', () => {
 		const profile = makeProfile();
-		const exempt = profile.physicians[0];
-		exempt.exempt = true;
+		const absent = profile.physicians[0];
+		absent.absenceFrom = '2026-01-01';
+		absent.absenceTo = '2026-12-31';
 		const slots = buildSlots(2026, 'combined');
-		const result = generateSchedule({ physicians: profile.physicians, slots, pins: {}, seed: 7 });
-		expect(Object.values(result.assignments)).not.toContain(exempt.id);
+		const result = generateSchedule({
+			year: 2026,
+			physicians: profile.physicians,
+			slots,
+			pins: {},
+			seed: 7
+		});
+		expect(Object.values(result.assignments)).not.toContain(absent.id);
 	});
 
-	it('respects unavailability ranges', () => {
+	it('respects the absence range', () => {
 		const profile = makeProfile();
 		const physician = profile.physicians[1];
-		physician.unavailability.push({
-			id: 'u1',
-			from: '2026-03-01',
-			to: '2026-03-31',
-			reason: 'Congés'
-		});
+		physician.absenceFrom = '2026-03-01';
+		physician.absenceTo = '2026-03-31';
 		const slots = buildSlots(2026, 'combined');
-		const result = generateSchedule({ physicians: profile.physicians, slots, pins: {}, seed: 9 });
+		const result = generateSchedule({
+			year: 2026,
+			physicians: profile.physicians,
+			slots,
+			pins: {},
+			seed: 9
+		});
 		for (const [slotId, physicianId] of Object.entries(result.assignments)) {
 			if (physicianId !== physician.id) continue;
 			const slot = slots.find((entry) => entry.id === slotId);
@@ -99,6 +109,7 @@ describe('generateSchedule', () => {
 		expect(slot).toBeTruthy();
 		const physician = profile.physicians[3];
 		const result = generateSchedule({
+			year: 2026,
 			physicians: profile.physicians,
 			slots,
 			pins: { [slot!.id]: physician.id },
@@ -110,7 +121,13 @@ describe('generateSchedule', () => {
 	it('keeps the quota deviation small', () => {
 		const profile = makeProfile();
 		const slots = buildSlots(2026, 'combined');
-		const result = generateSchedule({ physicians: profile.physicians, slots, pins: {}, seed: 5 });
+		const result = generateSchedule({
+			year: 2026,
+			physicians: profile.physicians,
+			slots,
+			pins: {},
+			seed: 5
+		});
 		applyResult(profile, result);
 		const stats = computeAllStats(profile, slots);
 		for (const entry of stats) {
@@ -127,7 +144,13 @@ describe('generateSchedule', () => {
 	it('spaces shifts reasonably', () => {
 		const profile = makeProfile();
 		const slots = buildSlots(2026, 'combined');
-		const result = generateSchedule({ physicians: profile.physicians, slots, pins: {}, seed: 21 });
+		const result = generateSchedule({
+			year: 2026,
+			physicians: profile.physicians,
+			slots,
+			pins: {},
+			seed: 21
+		});
 		applyResult(profile, result);
 		const stats = computeAllStats(profile, slots);
 		for (const entry of stats) {
@@ -141,7 +164,13 @@ describe('generateSchedule', () => {
 		const physician = profile.physicians[1];
 		physician.unavailableWeekdays = ['mer'];
 		const slots = buildSlots(2026, 'combined');
-		const result = generateSchedule({ physicians: profile.physicians, slots, pins: {}, seed: 13 });
+		const result = generateSchedule({
+			year: 2026,
+			physicians: profile.physicians,
+			slots,
+			pins: {},
+			seed: 13
+		});
 		for (const [slotId, physicianId] of Object.entries(result.assignments)) {
 			if (physicianId !== physician.id) continue;
 			const slot = slots.find((entry) => entry.id === slotId);
@@ -162,9 +191,10 @@ describe('generateSchedule', () => {
 		const slots = [...mondays, ...tuesdays].sort((left, right) =>
 			left.start.localeCompare(right.start)
 		);
-		const mondayLover = createPhysician(1, 'Lundi', '', false, [], { lun: 1 });
-		const tuesdayLover = createPhysician(2, 'Mardi', '', false, [], { mar: 1 });
+		const mondayLover = createPhysician(1, 'Lundi', '', [], { lun: 1 });
+		const tuesdayLover = createPhysician(2, 'Mardi', '', [], { mar: 1 });
 		const result = generateSchedule({
+			year: 2026,
 			physicians: [mondayLover, tuesdayLover],
 			slots,
 			pins: {},
@@ -182,9 +212,18 @@ describe('generateSchedule', () => {
 
 	it('returns warnings when nobody is available', () => {
 		const profile = makeProfile(2);
-		for (const physician of profile.physicians) physician.exempt = true;
+		for (const physician of profile.physicians) {
+			physician.absenceFrom = '2026-01-01';
+			physician.absenceTo = '2026-12-31';
+		}
 		const slots = buildSlots(2026, 'combined');
-		const result = generateSchedule({ physicians: profile.physicians, slots, pins: {}, seed: 1 });
+		const result = generateSchedule({
+			year: 2026,
+			physicians: profile.physicians,
+			slots,
+			pins: {},
+			seed: 1
+		});
 		expect(result.assignments).toEqual({});
 		expect(result.warnings.length).toBeGreaterThan(0);
 		expect(result.unassigned).toHaveLength(slots.length);
@@ -194,7 +233,8 @@ describe('generateSchedule', () => {
 describe('isAvailable', () => {
 	it('rejects a slot overlapping an absence', () => {
 		const physician = createPhysician(1, 'A');
-		physician.unavailability.push({ id: 'u1', from: '2026-05-01', to: '2026-05-10', reason: '' });
+		physician.absenceFrom = '2026-05-01';
+		physician.absenceTo = '2026-05-10';
 		const [slot] = buildSlots(2026, 'split').filter((entry) => entry.start === '2026-05-04');
 		expect(slot).toBeTruthy();
 		expect(isAvailable(physician, slot!)).toBe(false);
@@ -202,17 +242,17 @@ describe('isAvailable', () => {
 
 	it('accepts a combined weekend overlapping an absence partially? no — rejects it', () => {
 		const physician = createPhysician(1, 'A');
-		physician.unavailability.push({ id: 'u1', from: '2026-05-03', to: '2026-05-03', reason: '' });
+		physician.absenceFrom = '2026-05-03';
+		physician.absenceTo = '2026-05-03';
 		const weekend = buildSlots(2026, 'combined').find((entry) => entry.start === '2026-05-02');
 		expect(weekend).toBeTruthy();
 		expect(isAvailable(physician, weekend!)).toBe(false);
 	});
 
-	it('rejects a period exemption', () => {
+	it('rejects a slot overlapping the absence', () => {
 		const physician = createPhysician(1, 'A');
-		physician.exempt = true;
-		physician.exemptFrom = '2026-01-01';
-		physician.exemptTo = '2026-06-30';
+		physician.absenceFrom = '2026-01-01';
+		physician.absenceTo = '2026-06-30';
 		const slot = buildSlots(2026, 'split').find((entry) => entry.start === '2026-03-04');
 		expect(isAvailable(physician, slot!)).toBe(false);
 	});

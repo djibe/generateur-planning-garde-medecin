@@ -12,7 +12,6 @@ import {
 	adjustTargets,
 	averageTargets,
 	capacityByCategory,
-	isFullyExempt,
 	quotaMismatches
 } from '#lib/domain/quotas.js';
 import { computeAllStats } from '#lib/domain/stats.js';
@@ -28,7 +27,6 @@ import type {
 	ProfileSummary,
 	SemesterId,
 	Slot,
-	Unavailability,
 	Weekday,
 	WeekdayRank,
 	WeekendMode
@@ -86,7 +84,7 @@ class AppStore {
 	statsById = $derived.by(() => new Map(this.stats.map((entry) => [entry.physicianId, entry])));
 
 	mismatches = $derived.by(() =>
-		this.active ? quotaMismatches(this.active.physicians, this.slots) : []
+		this.active ? quotaMismatches(this.active.physicians, this.active.year, this.slots) : []
 	);
 
 	stale = $derived.by(
@@ -258,14 +256,14 @@ class AppStore {
 
 	// -------------------------------------------------------------- physicians
 
-	addPhysician(name = '', phone = '', exempt = false): string {
+	addPhysician(name = '', phone = ''): string {
 		const profile = this.active;
 		if (!profile) return '';
 		const order = profile.physicians.reduce(
 			(max, physician) => Math.max(max, physician.sortOrder),
 			0
 		);
-		const physician = createPhysician(order + 1, name, phone, exempt);
+		const physician = createPhysician(order + 1, name, phone);
 		profile.physicians.push(physician);
 		return physician.id;
 	}
@@ -302,23 +300,15 @@ class AppStore {
 		});
 	}
 
-	addUnavailability(physicianId: string): Unavailability | null {
-		const physician = this.physicianMap.get(physicianId);
-		if (!physician) return null;
-		const range: Unavailability = {
-			id: uid('una'),
-			from: `${this.active?.year ?? new Date().getFullYear()}-01-01`,
-			to: `${this.active?.year ?? new Date().getFullYear()}-01-01`,
-			reason: ''
-		};
-		physician.unavailability.push(range);
-		return range;
-	}
-
-	removeUnavailability(physicianId: string, rangeId: string): void {
+	setAbsence(physicianId: string, from: string | null, to: string | null): void {
 		const physician = this.physicianMap.get(physicianId);
 		if (!physician) return;
-		physician.unavailability = physician.unavailability.filter((range) => range.id !== rangeId);
+		physician.absenceFrom = from || null;
+		physician.absenceTo = to || null;
+	}
+
+	clearAbsence(physicianId: string): void {
+		this.setAbsence(physicianId, null, null);
 	}
 
 	/**
@@ -362,6 +352,8 @@ class AppStore {
 		if (!physician) return;
 		const safe = Number.isFinite(value) ? Math.max(0, Math.min(400, Math.floor(value))) : 0;
 		physician.targets[semester][category] = safe;
+		physician.targetBase ??= { S1: { ...physician.targets.S1 }, S2: { ...physician.targets.S2 } };
+		physician.targetBase[semester][category] = safe;
 	}
 
 	applyAverageTargets(semester: SemesterId): void {
@@ -369,11 +361,12 @@ class AppStore {
 		if (!profile) return;
 		averageTargets(
 			profile.physicians,
+			profile.year,
 			semester,
 			capacityByCategory(this.slots, semester),
 			this.slots
 		);
-		this.notify('success', `Objectifs ${semester} répartis équitablement.`);
+		this.notify('success', `Objectifs ${semester} répartis équitablement (absences déduites).`);
 	}
 
 	adjustTargetsToCapacity(semester: SemesterId): void {
@@ -381,11 +374,12 @@ class AppStore {
 		if (!profile) return;
 		adjustTargets(
 			profile.physicians,
+			profile.year,
 			semester,
 			capacityByCategory(this.slots, semester),
 			this.slots
 		);
-		this.notify('success', `Objectifs ${semester} ajustés aux créneaux disponibles.`);
+		this.notify('success', `Objectifs ${semester} ajustés aux créneaux (absences déduites).`);
 	}
 
 	importPhysicians(rows: CsvPhysician[], mode: 'append' | 'replace'): void {
@@ -407,9 +401,10 @@ class AppStore {
 					order,
 					row.name,
 					row.phone,
-					row.exempt,
 					row.unavailableWeekdays,
-					row.weekdayPreferences
+					row.weekdayPreferences,
+					row.absenceFrom,
+					row.absenceTo
 				)
 			);
 		}
@@ -451,6 +446,7 @@ class AppStore {
 
 		const started = typeof performance !== 'undefined' ? performance.now() : Date.now();
 		const result = generateSchedule({
+			year: profile.year,
 			physicians: profile.physicians,
 			slots: this.slots,
 			pins: profile.pins,
@@ -706,7 +702,3 @@ class AppStore {
 }
 
 export const app = new AppStore();
-
-export function isPhysicianExempt(physician: Physician): boolean {
-	return isFullyExempt(physician);
-}

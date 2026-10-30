@@ -14,17 +14,18 @@ aucune donnée envoyée sur Internet.
 ### 1. Médecins & objectifs
 
 - Nom du profil et du secteur, année.
-- Liste des médecins : nom, téléphone, ordre, exemption, absences.
+- Liste des médecins : nom, téléphone, ordre, plage d'absence unique (du / au).
 - Une colonne par jour (lundi–vendredi) combinant indisponibilité (max 4 jours) et préférence
   de garde (1 = jour préféré … 5 = moins préféré). Les jours fériés restent disponibles et les
   week-ends ne sont pas concernés.
 - Le générateur privilégie les jours préférés sans sacrifier les objectifs ni l'espacement.
-- Import CSV (`Nom;Téléphone;Exempté;Jours indisponibles;Jours préférés`), ajout/suppression,
-  réordonnancement.
+- Import CSV (`Nom;Téléphone;Absence du;Absence au;Jours indisponibles;Jours préférés`),
+  ajout/suppression, réordonnancement.
 - Objectifs **par semestre** et par catégorie : semaine, vendredi, samedi, dimanche,
   veille de férié, jour férié.
-- Boutons « Répartition équitable » (calcule des objectifs au prorata des créneaux) et
-  « Ajuster aux créneaux » (corrige les objectifs existants).
+- Boutons « Répartition équitable » (objectifs au prorata des créneaux et de la durée d'absence)
+  et « Ajuster aux créneaux » (conserve la répartition saisie et la réduit au prorata des
+  absences).
 - Alerte sur les écarts entre la somme des objectifs et le nombre de créneaux disponibles.
   Les objectifs sont **indicatifs** : le générateur s'en approche au mieux.
 
@@ -69,7 +70,8 @@ aucune donnée envoyée sur Internet.
 | Attribution                       | 1 praticien par garde ; tous les jours de l'année sont couverts                                            |
 | Objectifs                         | Souples, par semestre et par catégorie ; le solveur minimise l'écart                                       |
 | Espacement                        | Soft : pénalise les gardes à moins de 14 jours, évite deux week-ends consécutifs                           |
-| Exemptions                        | Exemption totale (exclu de la génération) ou sur une période ; absences ponctuelles                        |
+| Absences                          | Une plage « du / au » par médecin ; un médecin absent toute l'année est exclu de la génération             |
+| Prorata des absences              | Les jours dus sont réduits selon la durée d'absence dans le semestre, via les boutons de répartition       |
 | Veille de férié                   | Un jour qui précède un férié est compté dans la catégorie « veille de férié »                              |
 | Férié un vendredi/samedi/dimanche | Compté dans « férié » **et** dans la colonne du jour (d'où des totaux pouvant dépasser le nombre de jours) |
 | Verrouillage                      | Une garde verrouillée est réattribuée au même médecin lors de la régénération                              |
@@ -106,15 +108,16 @@ npm run dev        # http://localhost:5173
 ## Format CSV
 
 Une ligne par médecin, séparateur `;` (ou `,` / tabulation, détection automatique).
-L'en-tête est optionnel. Les colonnes `Téléphone`, `Exempté`, `Jours indisponibles` et
-`Jours préférés` sont optionnelles ; sans en-tête, la 4e colonne contient les jours
-indisponibles et la 5e les préférences.
+L'en-tête est optionnel. Les colonnes `Téléphone`, `Absence du`, `Absence au`,
+`Jours indisponibles` et `Jours préférés` sont optionnelles ; sans en-tête, les colonnes sont
+dans l'ordre `Nom;Téléphone;Absence du;Absence au;Jours indisponibles;Jours préférés`.
+Les dates d'absence utilisent le format `AAAA-MM-JJ`.
 
 ```csv
-Nom;Téléphone;Exempté;Jours indisponibles;Jours préférés
-Dr Alice Martin;06 12 34 56 78;non;lun,mer;mar=1,jeu=2
-Dr Benoît Petit;06 98 76 54 32;oui;;ven=1
-Dr Chloé Durand;06 11 22 33 44;non;ven;lun=1,mer=3
+Nom;Téléphone;Absence du;Absence au;Jours indisponibles;Jours préférés
+Dr Alice Martin;06 12 34 56 78;2026-03-01;2026-03-31;lun,mer;mar=1,jeu=2
+Dr Benoît Petit;06 98 76 54 32;;;;ven=1
+Dr Chloé Durand;06 11 22 33 44;;;ven;lun=1,mer=3
 ```
 
 Le motif de jours indisponibles est annuel et ne concerne que **lundi à vendredi**.
@@ -132,7 +135,9 @@ Les valeurs inconnues (`sam`, `dim`, `lundi`, rang hors 1–5, préférence sur 
 indisponible, 5e jour indisponible…) sont ignorées et signalées dans l'aperçu d'import :
 les valeurs valides de la ligne sont conservées.
 
-Les valeurs reconnues pour l'exemption sont `oui`/`non`, `true`/`false`, `1`/`0`.
+Les dates d'absence invalides, incomplètes ou dont la fin précède le début sont ignorées et
+signalées dans l'aperçu. Les anciens fichiers contenant une colonne `Exempté` ne sont **pas**
+compatibles : utilisez les colonnes `Absence du` / `Absence au`.
 Les guillemets sont gérés (`"Dr; A"`). Un BOM UTF-8 est ignoré.
 
 ---
@@ -203,7 +208,7 @@ npm test
 
 La suite couvre le calcul de Pâques et des fériés, la construction des créneaux (modes
 groupé/séparé, veilles, fériés en week-end), les quotas, le CSV et le générateur
-(remplissage complet, déterminisme, exemptions, absences, verrous, espacement).
+(remplissage complet, déterminisme, absences, prorata des objectifs, verrous, espacement).
 
 ---
 

@@ -114,7 +114,7 @@ export function isSlotBlockedByWeekdays(physician: Physician, slot: Slot): boole
 	return slot.dates.some((date) => isWeekdayBlocked(physician, date));
 }
 
-/** Categories that are reachable for this physician in a semester, ignoring absences/exemptions. */
+/** Categories that are reachable for this physician in a semester, ignoring absences. */
 export function weekdayPossibleCategories(
 	physician: Physician,
 	slots: Slot[],

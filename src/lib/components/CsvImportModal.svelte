@@ -15,7 +15,11 @@
 	const rows = $derived(parseCsv(text));
 	const invalidCount = $derived(
 		rows.reduce(
-			(total, row) => total + row.invalidWeekdays.length + row.invalidPreferences.length,
+			(total, row) =>
+				total +
+				row.invalidWeekdays.length +
+				row.invalidPreferences.length +
+				row.invalidAbsence.length,
 			0
 		)
 	);
@@ -57,11 +61,11 @@
 			<i class="bi bi-info-circle-fill"></i>
 			<div>
 				Format attendu :
-				<code>Nom;Téléphone;Exempté;Jours indisponibles;Jours préférés</code> — une ligne par
-				médecin. Seule la première colonne est obligatoire. Le séparateur <code>;</code>,
-				<code>,</code> ou tabulation est détecté automatiquement. Jours indisponibles :
-				<code>lun</code> à <code>ven</code> (max 4). Préférences : <code>lun=1,mer=3</code>
-				(1 = jour préféré). Les jours fériés restent disponibles.
+				<code>Nom;Téléphone;Absence du;Absence au;Jours indisponibles;Jours préférés</code> — une
+				ligne par médecin. Seule la première colonne est obligatoire. Le séparateur <code>;</code>,
+				<code>,</code> ou tabulation est détecté automatiquement. Dates au format
+				<code>AAAA-MM-JJ</code>. Jours indisponibles : <code>lun</code> à <code>ven</code> (max 4).
+				Préférences : <code>lun=1,mer=3</code> (1 = jour préféré). Les jours fériés restent disponibles.
 			</div>
 		</div>
 
@@ -111,7 +115,7 @@
 				class="form-control font-monospace"
 				rows="5"
 				bind:value={text}
-				placeholder={'Dr Alice Martin;06 12 34 56 78;non;lun,mer;mar=1,jeu=2\nDr Benoit Petit;06 98 76 54 32;oui;;ven=1'}
+				placeholder={'Dr Alice Martin;06 12 34 56 78;2026-03-01;2026-03-31;lun,mer;mar=1,jeu=2\nDr Benoit Petit;06 98 76 54 32;;;;ven=1'}
 			></textarea>
 		</div>
 
@@ -122,9 +126,9 @@
 		{#if invalidCount}
 			<div class="alert alert-warning mb-0 py-2 small">
 				<i class="bi bi-exclamation-triangle me-1"></i>
-				{invalidCount} valeur(s) ignorée(s). Jours : <code>lun</code> à <code>ven</code> (max 4
-				indisponibles) ; préférences : <code>lun=1</code> à <code>ven=5</code>, rangs uniques,
-				uniquement sur un jour disponible.
+				{invalidCount} valeur(s) ignorée(s). Dates : <code>AAAA-MM-JJ</code>, fin après début. Jours
+				: <code>lun</code> à <code>ven</code> (max 4 indisponibles) ; préférences :
+				<code>lun=1</code> à <code>ven=5</code>, rangs uniques, uniquement sur un jour disponible.
 			</div>
 		{/if}
 
@@ -140,7 +144,8 @@
 							<tr>
 								<th>Nom</th>
 								<th>Téléphone</th>
-								<th>Exempté</th>
+								<th>Absence du</th>
+								<th>Absence au</th>
 								<th>Jours indisponibles</th>
 								<th>Jours préférés</th>
 							</tr>
@@ -150,7 +155,18 @@
 								<tr>
 									<td>{row.name}</td>
 									<td class="mono">{row.phone || '—'}</td>
-									<td>{row.exempt ? 'oui' : 'non'}</td>
+									<td class="small mono">
+										{row.absenceFrom ?? '—'}
+										{#if row.invalidAbsence.length}
+											<span
+												class="badge text-bg-warning ms-1"
+												title={`Dates ignorées : ${row.invalidAbsence.join(', ')}`}
+											>
+												{row.invalidAbsence.length} ignorée(s)
+											</span>
+										{/if}
+									</td>
+									<td class="small mono">{row.absenceTo ?? '—'}</td>
 									<td class="small">
 										{row.unavailableWeekdays.length
 											? row.unavailableWeekdays.map(weekdayLabel).join(', ')
