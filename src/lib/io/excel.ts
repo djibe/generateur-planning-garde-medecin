@@ -282,7 +282,6 @@ export async function exportPlanningWorkbook(profile: Profile, slots: Slot[]): P
 			{ header: 'Jour(s)', key: 'days', width: 26 },
 			{ header: 'Type', key: 'type', width: 16 },
 			{ header: 'Médecin', key: 'physician', width: 28 },
-			{ header: 'Téléphone', key: 'phone', width: 18 },
 			{ header: 'Férié', key: 'holiday', width: 16 },
 			{ header: 'Verrouillé', key: 'pinned', width: 10 }
 		],
@@ -297,14 +296,28 @@ export async function exportPlanningWorkbook(profile: Profile, slots: Slot[]): P
 					type: TYPE_LABEL[slot.type] ?? slot.type,
 					typeKey: slot.type,
 					physician: physician?.name || 'Non attribué',
-					phone: physician?.phone ?? '',
 					holiday: slot.holidayName ?? '',
 					pinned: profile.pins[slot.id] ? 'oui' : ''
 				};
 			})
 	});
 
-	await exportSheets(fileBase(profile, 'planning'), [sheetFor('S1'), sheetFor('S2')]);
+	await exportSheets(fileBase(profile, 'planning'), [
+		sheetFor('S1'),
+		sheetFor('S2'),
+		{
+			name: 'Médecins',
+			title: `Médecins — ${profile.area || profile.name} ${profile.year}`,
+			columns: [
+				{ header: 'Nom', key: 'name', width: 30 },
+				{ header: 'Téléphone', key: 'phone', width: 18 }
+			],
+			rows: sortPhysicians(profile).map((physician) => ({
+				name: physician.name || 'Sans nom',
+				phone: physician.phone || ''
+			}))
+		}
+	]);
 }
 
 export async function exportDoctorWorkbook(
