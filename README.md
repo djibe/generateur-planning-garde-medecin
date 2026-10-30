@@ -103,6 +103,11 @@ npm run dev        # http://localhost:5173
 | `npm run test:watch` | Tests en mode watch                   |
 | `npm run format`     | Formatage Prettier                    |
 
+### Conseillé: RTK
+
+- `winget install rtk-ai.rtk`
+- `rtk init --global --opencode`
+
 ---
 
 ## Format CSV
