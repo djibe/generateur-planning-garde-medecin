@@ -279,8 +279,7 @@ export async function exportPlanningWorkbook(profile: Profile, slots: Slot[]): P
 		title: `Planning ${semester} — ${profile.area || profile.name} ${profile.year}`,
 		typeKey: 'typeKey',
 		columns: [
-			{ header: 'Date', key: 'date', width: 22 },
-			{ header: 'Jour(s)', key: 'days', width: 20 },
+			{ header: 'Jour(s)', key: 'days', width: 26 },
 			{ header: 'Type', key: 'type', width: 16 },
 			{ header: 'Médecin', key: 'physician', width: 28 },
 			{ header: 'Téléphone', key: 'phone', width: 18 },
@@ -294,7 +293,6 @@ export async function exportPlanningWorkbook(profile: Profile, slots: Slot[]): P
 				const physicianId = profile.assignments[semester]?.[slot.id];
 				const physician = physicianId ? physicianById.get(physicianId) : undefined;
 				return {
-					date: formatLong(slot.start),
 					days: slotLabel(slot),
 					type: TYPE_LABEL[slot.type] ?? slot.type,
 					typeKey: slot.type,
