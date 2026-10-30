@@ -302,8 +302,6 @@
 								<th style="width: 4.5rem">#</th>
 								<th>Nom</th>
 								<th>Téléphone</th>
-								<th style="width: 9rem" title="Premier jour d’absence">Exempté du</th>
-								<th style="width: 9rem" title="Dernier jour d’absence">au</th>
 								{#each WEEKDAYS as day (day)}
 									<th
 										style="width: 5.4rem"
@@ -313,6 +311,8 @@
 										{WEEKDAY_LABELS[day].slice(0, 3)}
 									</th>
 								{/each}
+								<th style="width: 9rem" title="Premier jour d’absence">Exempté du</th>
+								<th style="width: 9rem" title="Dernier jour d’absence">au</th>
 								<th style="width: 7.5rem" class="text-end">Actions</th>
 							</tr>
 						</thead>
@@ -377,6 +377,22 @@
 											oninput={(event) => (physician.phone = event.currentTarget.value)}
 										/>
 									</td>
+									{#each WEEKDAYS as day (day)}
+										<td class="text-center">
+											<select
+												class="form-select form-select-sm weekday-select"
+												value={weekdayValue(physician, day)}
+												aria-label={`${WEEKDAY_LABELS[day]} — ${physician.name || 'sans nom'}`}
+												onchange={(event) => onWeekdayChange(physician, day, event)}
+											>
+												<option value="">—</option>
+												<option value="off">Indispo</option>
+												{#each WEEKDAY_RANKS as rank (rank)}
+													<option value={String(rank)}>{rank}</option>
+												{/each}
+											</select>
+										</td>
+									{/each}
 									<td>
 										<input
 											type="date"
@@ -397,22 +413,6 @@
 											oninput={(event) => onAbsenceChange(physician, 'to', event)}
 										/>
 									</td>
-									{#each WEEKDAYS as day (day)}
-										<td class="text-center">
-											<select
-												class="form-select form-select-sm weekday-select"
-												value={weekdayValue(physician, day)}
-												aria-label={`${WEEKDAY_LABELS[day]} — ${physician.name || 'sans nom'}`}
-												onchange={(event) => onWeekdayChange(physician, day, event)}
-											>
-												<option value="">—</option>
-												<option value="off">Indispo</option>
-												{#each WEEKDAY_RANKS as rank (rank)}
-													<option value={String(rank)}>{rank}</option>
-												{/each}
-											</select>
-										</td>
-									{/each}
 									<td class="text-end text-nowrap">
 										{#if hasAbsence(physician)}
 											<button
@@ -439,10 +439,10 @@
 					</table>
 				</div>
 				<div class="app-card-foot small text-secondary">
-					<strong>Absent du / au</strong> : période d’absence unique, vide si le médecin est
-					disponible toute l’année. Chaque jour : <strong>—</strong> disponible sans préférence,
-					<strong>Indispo</strong> jamais ce jour (maximum 4 jours), <strong>1</strong> jour préféré
-					… <strong>5</strong> moins préféré.
+					Chaque jour : <strong>—</strong> disponible sans préférence, <strong>Indispo</strong>
+					jamais ce jour (maximum 4 jours), <strong>1</strong> jour préféré … <strong>5</strong>
+					moins préféré. <strong>Exempté du / au</strong> : période d’absence unique, vide si le médecin
+					est disponible toute l’année.
 				</div>
 			{/if}
 		</div>
