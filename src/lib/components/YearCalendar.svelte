@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '#lib/actions/tooltip.js';
 	import {
 		eachDay,
 		formatLong,
@@ -125,7 +126,7 @@
 							type="button"
 							class={classes(cell)}
 							disabled={!onSlotClick}
-							title={title(cell)}
+							use:tooltip={title(cell)}
 							onclick={() => cell.slot && onSlotClick?.(cell.slot)}
 						>
 							<span class="day-num">{cell.day}</span>

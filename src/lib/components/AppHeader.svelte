@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '#lib/actions/tooltip.js';
 	import { app } from '#lib/stores/app.svelte.js';
 	import { formatDateTime } from '#lib/utils/date.js';
 	import ConfirmModal from './ConfirmModal.svelte';
@@ -52,7 +53,7 @@
 				type="button"
 				class="btn btn-sm btn-outline-secondary"
 				onclick={() => (newOpen = true)}
-				title="Nouveau profil"
+				use:tooltip={'Nouveau profil'}
 			>
 				<i class="bi bi-plus-lg"></i>
 				<span class="d-none d-lg-inline ms-1">Nouveau</span>
@@ -63,7 +64,7 @@
 					type="button"
 					class="btn btn-sm btn-outline-secondary"
 					onclick={() => app.duplicateProfile()}
-					title="Dupliquer ce profil pour l'année suivante"
+					use:tooltip={"Dupliquer ce profil pour l'année suivante"}
 				>
 					<i class="bi bi-copy"></i>
 					<span class="d-none d-xl-inline ms-1">Dupliquer</span>
@@ -71,8 +72,9 @@
 				<button
 					type="button"
 					class="btn btn-sm btn-outline-danger"
+					aria-label="Supprimer ce profil"
 					onclick={() => (deleteOpen = true)}
-					title="Supprimer ce profil"
+					use:tooltip={'Supprimer ce profil'}
 				>
 					<i class="bi bi-trash3"></i>
 				</button>
@@ -86,7 +88,11 @@
 					<span class="d-none d-xl-inline ms-1">Données</span>
 				</summary>
 				<div class="menu">
-					<button type="button" onclick={() => app.exportBackup()}>
+					<button
+						type="button"
+						onclick={() => app.exportBackup()}
+						use:tooltip={'Télécharger une sauvegarde de tous les profils'}
+					>
 						<i class="bi bi-download"></i> Exporter tous les profils (.json)
 					</button>
 					<label>
@@ -105,7 +111,9 @@
 				type="button"
 				class="btn btn-sm btn-icon"
 				onclick={() => app.toggleTheme()}
-				title={app.ui.theme === 'light' ? 'Activer le thème sombre' : 'Activer le thème clair'}
+				use:tooltip={app.ui.theme === 'light'
+					? 'Activer le thème sombre'
+					: 'Activer le thème clair'}
 				aria-label="Basculer le thème"
 			>
 				<i class={app.ui.theme === 'light' ? 'bi bi-moon-stars' : 'bi bi-sun'}></i>
@@ -117,7 +125,7 @@
 					class="btn btn-primary btn-sm px-3"
 					onclick={() => app.generate()}
 					disabled={!app.active.physicians.length}
-					title="Générer ou régénérer le planning"
+					use:tooltip={'Générer ou régénérer le planning'}
 				>
 					<i class="bi bi-stars me-1"></i> Générer
 				</button>

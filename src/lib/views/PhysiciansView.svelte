@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '#lib/actions/tooltip.js';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import CsvImportModal from '#lib/components/CsvImportModal.svelte';
 	import {
@@ -249,6 +250,7 @@
 				<button
 					type="button"
 					class="btn btn-sm btn-outline-secondary"
+					use:tooltip={'Importer des médecins depuis un fichier CSV'}
 					onclick={() => (csvOpen = true)}
 				>
 					<i class="bi bi-filetype-csv me-1"></i> Importer un CSV
@@ -256,6 +258,7 @@
 				<button
 					type="button"
 					class="btn btn-sm btn-outline-secondary"
+					use:tooltip={'Exporter les médecins et leurs objectifs au format Excel'}
 					onclick={exportExcel}
 					disabled={exporting || !physicians.length}
 				>
@@ -266,7 +269,12 @@
 					{/if}
 					Excel
 				</button>
-				<button type="button" class="btn btn-sm btn-primary" onclick={() => app.addPhysician()}>
+				<button
+					type="button"
+					class="btn btn-sm btn-primary"
+					use:tooltip={'Ajouter un médecin'}
+					onclick={() => app.addPhysician()}
+				>
 					<i class="bi bi-plus-lg me-1"></i> Ajouter
 				</button>
 			</div>
@@ -282,12 +290,18 @@
 						<code>Nom;Téléphone;Jours…</code>.
 					</p>
 					<div class="d-flex gap-2">
-						<button type="button" class="btn btn-primary btn-sm" onclick={() => app.addPhysician()}>
+						<button
+							type="button"
+							class="btn btn-primary btn-sm"
+							use:tooltip={'Ajouter un médecin à la liste'}
+							onclick={() => app.addPhysician()}
+						>
 							<i class="bi bi-plus-lg me-1"></i> Ajouter un médecin
 						</button>
 						<button
 							type="button"
 							class="btn btn-outline-secondary btn-sm"
+							use:tooltip={'Importer des médecins depuis un fichier CSV'}
 							onclick={() => (csvOpen = true)}
 						>
 							Importer un CSV
@@ -418,7 +432,8 @@
 											<button
 												type="button"
 												class="btn btn-sm btn-outline-secondary"
-												title="Effacer l’absence"
+												aria-label="Effacer l’absence"
+												use:tooltip={'Effacer l’absence'}
 												onclick={() => app.clearAbsence(physician.id)}
 											>
 												<i class="bi bi-calendar-x"></i>
@@ -427,7 +442,8 @@
 										<button
 											type="button"
 											class="btn btn-sm btn-outline-danger ms-1"
-											title="Supprimer ce médecin"
+											aria-label="Supprimer ce médecin"
+											use:tooltip={'Supprimer ce médecin'}
 											onclick={() => (deletingId = physician.id)}
 										>
 											<i class="bi bi-trash3"></i>
@@ -459,6 +475,7 @@
 							class="btn btn-outline-primary"
 							class:active={semester === 'S1'}
 							onclick={() => (semester = 'S1')}
+							use:tooltip={'Saisir les objectifs du premier semestre'}
 						>
 							Semestre 1
 						</button>
@@ -467,6 +484,7 @@
 							class="btn btn-outline-primary"
 							class:active={semester === 'S2'}
 							onclick={() => (semester = 'S2')}
+							use:tooltip={'Saisir les objectifs du second semestre'}
 						>
 							Semestre 2
 						</button>
@@ -474,7 +492,7 @@
 					<button
 						type="button"
 						class="btn btn-sm btn-outline-secondary"
-						title="Répartir au prorata de la disponibilité (absences déduites)"
+						use:tooltip={'Répartir au prorata de la disponibilité (absences déduites)'}
 						onclick={() => app.applyAverageTargets(semester)}
 					>
 						<i class="bi bi-magic me-1"></i> Répartition équitable
@@ -482,7 +500,7 @@
 					<button
 						type="button"
 						class="btn btn-sm btn-outline-secondary"
-						title="Ajuster les objectifs actuels aux créneaux, absences déduites"
+						use:tooltip={'Ajuster les objectifs actuels aux créneaux, absences déduites'}
 						onclick={() => app.adjustTargetsToCapacity(semester)}
 					>
 						<i class="bi bi-rulers me-1"></i> Ajuster aux créneaux

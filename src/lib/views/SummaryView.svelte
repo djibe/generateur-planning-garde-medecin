@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '#lib/actions/tooltip.js';
 	import { isAbsentAllYear } from '#lib/domain/absence.js';
 	import { CATEGORIES, CATEGORY_LABELS, CATEGORY_SHORT } from '#lib/domain/quotas.js';
 	import { targetDeviation } from '#lib/domain/stats.js';
@@ -94,12 +95,18 @@
 			<p class="section-note mb-0">Totaux par semestre et sur l’année pour chaque médecin.</p>
 		</div>
 		<div class="ms-auto d-flex gap-2">
-			<button type="button" class="btn btn-sm btn-outline-secondary" onclick={() => window.print()}>
+			<button
+				type="button"
+				class="btn btn-sm btn-outline-secondary"
+				use:tooltip={'Imprimer la synthèse'}
+				onclick={() => window.print()}
+			>
 				<i class="bi bi-printer me-1"></i> Imprimer
 			</button>
 			<button
 				type="button"
 				class="btn btn-sm btn-outline-secondary"
+				use:tooltip={'Exporter la synthèse au format Excel'}
 				onclick={exportExcel}
 				disabled={exporting || !physicians.length}
 			>

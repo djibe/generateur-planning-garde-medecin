@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '#lib/actions/tooltip.js';
 	import { app } from '#lib/stores/app.svelte.js';
 
 	const currentYear = new Date().getFullYear();
@@ -103,7 +104,11 @@
 							{#if error}
 								<div class="alert alert-danger py-2 mb-0 small">{error}</div>
 							{/if}
-							<button type="submit" class="btn btn-primary btn-lg">
+							<button
+								type="submit"
+								class="btn btn-primary btn-lg"
+								use:tooltip={'Créer un nouveau profil de planning'}
+							>
 								<i class="bi bi-stars me-1"></i> Créer le planning
 							</button>
 						</form>
@@ -117,6 +122,7 @@
 										type="button"
 										class="btn btn-sm btn-outline-secondary"
 										onclick={() => app.selectProfile(profile.id)}
+										use:tooltip={`Ouvrir le profil ${profile.name}`}
 									>
 										{profile.name}
 									</button>

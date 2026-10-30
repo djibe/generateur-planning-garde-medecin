@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '#lib/actions/tooltip.js';
 	import TypeBadge from '#lib/components/TypeBadge.svelte';
 	import YearCalendar from '#lib/components/YearCalendar.svelte';
 	import { absenceDaysInYear, hasAbsence } from '#lib/domain/absence.js';
@@ -82,12 +83,18 @@
 			</p>
 		</div>
 		<div class="ms-auto d-flex gap-2">
-			<button type="button" class="btn btn-sm btn-outline-secondary" onclick={() => window.print()}>
+			<button
+				type="button"
+				class="btn btn-sm btn-outline-secondary"
+				use:tooltip={'Imprimer le planning de ce médecin'}
+				onclick={() => window.print()}
+			>
 				<i class="bi bi-printer me-1"></i> Imprimer
 			</button>
 			<button
 				type="button"
 				class="btn btn-sm btn-outline-secondary"
+				use:tooltip={'Exporter le planning de ce médecin au format Excel'}
 				onclick={exportExcel}
 				disabled={exporting}
 			>
@@ -106,6 +113,7 @@
 			<button
 				type="button"
 				class="btn btn-sm {doctor.id === physician.id ? 'btn-primary' : 'btn-outline-secondary'}"
+				use:tooltip={`Afficher le planning de ${physician.name || 'ce médecin'}`}
 				onclick={() => app.setDoctor(physician.id)}
 			>
 				{physician.name || 'Sans nom'}
@@ -284,7 +292,8 @@
 											class="btn btn-sm {profile.pins[slot.id]
 												? 'btn-primary'
 												: 'btn-outline-secondary'}"
-											title={profile.pins[slot.id] ? 'Déverrouiller' : 'Verrouiller'}
+											aria-label={profile.pins[slot.id] ? 'Déverrouiller' : 'Verrouiller'}
+											use:tooltip={profile.pins[slot.id] ? 'Déverrouiller' : 'Verrouiller'}
 											onclick={() =>
 												profile.pins[slot.id] ? app.unpin(slot.id) : app.pin(slot.id)}
 										>

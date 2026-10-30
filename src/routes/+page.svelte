@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '#lib/actions/tooltip.js';
 	import { onMount } from 'svelte';
 	import AppHeader from '#lib/components/AppHeader.svelte';
 	import WelcomeScreen from '#lib/components/WelcomeScreen.svelte';
@@ -9,10 +10,30 @@
 	import SummaryView from '#lib/views/SummaryView.svelte';
 
 	const tabs = [
-		{ id: 'medecins', label: 'Médecins & objectifs', icon: 'bi-people' },
-		{ id: 'synthese', label: 'Synthèse', icon: 'bi-bar-chart' },
-		{ id: 'calendrier', label: 'Calendrier', icon: 'bi-calendar3' },
-		{ id: 'medecin', label: 'Par médecin', icon: 'bi-person-badge' }
+		{
+			id: 'medecins',
+			label: 'Médecins & objectifs',
+			icon: 'bi-people',
+			hint: 'Gérer les médecins et leurs objectifs'
+		},
+		{
+			id: 'synthese',
+			label: 'Synthèse',
+			icon: 'bi-bar-chart',
+			hint: 'Voir la synthèse et l’équité des gardes'
+		},
+		{
+			id: 'calendrier',
+			label: 'Calendrier',
+			icon: 'bi-calendar3',
+			hint: 'Voir le calendrier des gardes'
+		},
+		{
+			id: 'medecin',
+			label: 'Par médecin',
+			icon: 'bi-person-badge',
+			hint: 'Voir le planning d’un médecin'
+		}
 	] as const;
 
 	const validTabs = new Set<string>(tabs.map((tab) => tab.id));
@@ -59,6 +80,7 @@
 					class:active={app.ui.tab === tab.id}
 					onclick={() => selectTab(tab.id)}
 					aria-current={app.ui.tab === tab.id ? 'page' : undefined}
+					use:tooltip={tab.hint}
 				>
 					<i class="bi {tab.icon}"></i>
 					{tab.label}

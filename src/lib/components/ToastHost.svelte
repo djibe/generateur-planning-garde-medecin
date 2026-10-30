@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '#lib/actions/tooltip.js';
 	import { app } from '#lib/stores/app.svelte.js';
 
 	const icons: Record<string, string> = {
@@ -13,7 +14,12 @@
 		<div class="app-toast {toast.kind}" role="status">
 			<i class="bi {icons[toast.kind]} icon"></i>
 			<span class="flex-grow-1">{toast.message}</span>
-			<button type="button" onclick={() => app.dismissToast(toast.id)} aria-label="Fermer">
+			<button
+				type="button"
+				onclick={() => app.dismissToast(toast.id)}
+				aria-label="Fermer"
+				use:tooltip={'Fermer cette notification'}
+			>
 				<i class="bi bi-x-lg"></i>
 			</button>
 		</div>

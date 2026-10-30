@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '#lib/actions/tooltip.js';
 	import { onMount, type Snippet } from 'svelte';
 
 	let {
@@ -44,7 +45,13 @@
 	<div class="app-modal-card {size}">
 		<header class="app-modal-head">
 			<h2>{title}</h2>
-			<button type="button" class="btn-close ms-auto" aria-label="Fermer" onclick={close}></button>
+			<button
+				type="button"
+				class="btn-close ms-auto"
+				aria-label="Fermer"
+				use:tooltip={'Fermer'}
+				onclick={close}
+			></button>
 		</header>
 		<div class="app-modal-body">
 			{@render children?.()}

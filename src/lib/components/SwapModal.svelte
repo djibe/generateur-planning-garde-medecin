@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '#lib/actions/tooltip.js';
 	import { slotLabel } from '#lib/domain/calendar.js';
 	import { app } from '#lib/stores/app.svelte.js';
 	import { diffDays } from '#lib/utils/date.js';
@@ -84,6 +85,7 @@
 								type="button"
 								class="swap-row"
 								class:selected={selectedId === candidate.slot.id}
+								use:tooltip={`Échanger avec ${candidate.name} le ${slotLabel(candidate.slot)}`}
 								onclick={() => (selectedId = candidate.slot.id)}
 							>
 								<TypeBadge type={candidate.slot.type} weekend={candidate.slot.isWeekendBlock} />
@@ -99,8 +101,19 @@
 	{/if}
 
 	{#snippet footer()}
-		<button type="button" class="btn btn-outline-secondary" onclick={onclose}>Annuler</button>
-		<button type="button" class="btn btn-primary" onclick={confirm} disabled={!selectedId}>
+		<button
+			type="button"
+			class="btn btn-outline-secondary"
+			use:tooltip={'Annuler l’échange'}
+			onclick={onclose}>Annuler</button
+		>
+		<button
+			type="button"
+			class="btn btn-primary"
+			use:tooltip={'Valider l’échange des deux gardes'}
+			onclick={confirm}
+			disabled={!selectedId}
+		>
 			<i class="bi bi-arrow-left-right me-1"></i> Échanger
 		</button>
 	{/snippet}

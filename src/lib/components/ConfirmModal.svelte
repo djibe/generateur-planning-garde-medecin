@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '#lib/actions/tooltip.js';
 	import Modal from './Modal.svelte';
 
 	let {
@@ -21,10 +22,16 @@
 <Modal {title} {onclose} size="sm">
 	<p class="mb-0">{message}</p>
 	{#snippet footer()}
-		<button type="button" class="btn btn-outline-secondary" onclick={onclose}>Annuler</button>
+		<button
+			type="button"
+			class="btn btn-outline-secondary"
+			use:tooltip={'Annuler et fermer'}
+			onclick={onclose}>Annuler</button
+		>
 		<button
 			type="button"
 			class="btn {danger ? 'btn-danger' : 'btn-primary'}"
+			use:tooltip={danger ? 'Confirmer la suppression' : 'Confirmer l’action'}
 			onclick={() => {
 				onconfirm();
 				onclose();

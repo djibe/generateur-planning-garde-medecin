@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '#lib/actions/tooltip.js';
 	import { parseCsv } from '#lib/io/csv.js';
 	import { WEEKDAY_LABELS, WEEKDAYS } from '#lib/domain/weekdays.js';
 	import type { Weekday, WeekdayRank } from '#lib/domain/types.js';
@@ -206,8 +207,19 @@
 	</div>
 
 	{#snippet footer()}
-		<button type="button" class="btn btn-outline-secondary" onclick={onclose}>Annuler</button>
-		<button type="button" class="btn btn-primary" onclick={submit} disabled={!rows.length}>
+		<button
+			type="button"
+			class="btn btn-outline-secondary"
+			use:tooltip={'Annuler et fermer'}
+			onclick={onclose}>Annuler</button
+		>
+		<button
+			type="button"
+			class="btn btn-primary"
+			use:tooltip={'Importer les lignes valides'}
+			onclick={submit}
+			disabled={!rows.length}
+		>
 			<i class="bi bi-box-arrow-in-down me-1"></i>
 			Importer {rows.length ? `(${rows.length})` : ''}
 		</button>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '#lib/actions/tooltip.js';
 	import { app } from '#lib/stores/app.svelte.js';
 	import Modal from './Modal.svelte';
 
@@ -42,8 +43,17 @@
 			<div class="form-text">Sert à retrouver le planning dans la liste des profils.</div>
 		</div>
 		<div class="d-flex justify-content-end gap-2 pt-1">
-			<button type="button" class="btn btn-outline-secondary" onclick={onclose}>Annuler</button>
-			<button type="submit" class="btn btn-primary">Créer le profil</button>
+			<button
+				type="button"
+				class="btn btn-outline-secondary"
+				use:tooltip={'Annuler la création'}
+				onclick={onclose}>Annuler</button
+			>
+			<button
+				type="submit"
+				class="btn btn-primary"
+				use:tooltip={'Créer le profil et ouvrir le planning'}>Créer le profil</button
+			>
 		</div>
 	</form>
 </Modal>

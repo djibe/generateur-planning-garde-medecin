@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tooltip } from '#lib/actions/tooltip.js';
 	import SwapModal from '#lib/components/SwapModal.svelte';
 	import TypeBadge from '#lib/components/TypeBadge.svelte';
 	import YearCalendar from '#lib/components/YearCalendar.svelte';
@@ -92,6 +93,7 @@
 					class="btn btn-outline-primary"
 					class:active={semester === 'S1'}
 					onclick={() => (semester = 'S1')}
+					use:tooltip={'Afficher le premier semestre'}
 				>
 					S1
 				</button>
@@ -100,6 +102,7 @@
 					class="btn btn-outline-primary"
 					class:active={semester === 'S2'}
 					onclick={() => (semester = 'S2')}
+					use:tooltip={'Afficher le second semestre'}
 				>
 					S2
 				</button>
@@ -110,7 +113,7 @@
 					class="btn btn-outline-secondary"
 					class:active={mode === 'calendar'}
 					onclick={() => (mode = 'calendar')}
-					title="Vue calendrier"
+					use:tooltip={'Vue calendrier'}
 				>
 					<i class="bi bi-grid-3x3-gap me-1"></i> Calendrier
 				</button>
@@ -119,17 +122,23 @@
 					class="btn btn-outline-secondary"
 					class:active={mode === 'list'}
 					onclick={() => (mode = 'list')}
-					title="Vue liste"
+					use:tooltip={'Vue liste'}
 				>
 					<i class="bi bi-list-ul me-1"></i> Liste
 				</button>
 			</div>
-			<button type="button" class="btn btn-sm btn-outline-secondary" onclick={() => window.print()}>
+			<button
+				type="button"
+				class="btn btn-sm btn-outline-secondary"
+				use:tooltip={'Imprimer le calendrier'}
+				onclick={() => window.print()}
+			>
 				<i class="bi bi-printer me-1"></i> Imprimer
 			</button>
 			<button
 				type="button"
 				class="btn btn-sm btn-outline-secondary"
+				use:tooltip={'Exporter le calendrier au format Excel'}
 				onclick={exportExcel}
 				disabled={exporting || !physicians.length}
 			>
@@ -227,7 +236,8 @@
 										<button
 											type="button"
 											class="btn btn-sm {pinned ? 'btn-primary' : 'btn-outline-secondary'}"
-											title={pinned ? 'Déverrouiller cette garde' : 'Verrouiller cette garde'}
+											aria-label={pinned ? 'Déverrouiller cette garde' : 'Verrouiller cette garde'}
+											use:tooltip={pinned ? 'Déverrouiller cette garde' : 'Verrouiller cette garde'}
 											onclick={() => togglePin(slot)}
 										>
 											<i class="bi {pinned ? 'bi-lock-fill' : 'bi-unlock'}"></i>
@@ -237,7 +247,8 @@
 										<button
 											type="button"
 											class="btn btn-sm btn-outline-secondary"
-											title="Choisir un autre médecin à échanger"
+											aria-label="Choisir un autre médecin à échanger"
+											use:tooltip={'Choisir un autre médecin à échanger'}
 											onclick={() => (swapSlotId = slot.id)}
 										>
 											<i class="bi bi-arrow-left-right"></i>
