@@ -5,10 +5,106 @@
 		<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="theme-color" content="#4150f5" />
+		<title>Générateur de planning de garde par RecoMédicales</title>
 		<meta
 			name="description"
 			content="Générateur de planning de garde pour médecins généralistes : équité, jours fériés français, export Excel."
 		/>
+		<link rel="canonical" href="https://planning-garde.netlify.app/" />
+
+		<!-- Open Graph -->
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content="Planning de garde — RecoMédicales" />
+		<meta property="og:locale" content="fr_FR" />
+		<meta property="og:url" content="https://planning-garde.netlify.app/" />
+		<meta property="og:title" content="Générateur de planning de garde — RecoMédicales" />
+		<meta
+			property="og:description"
+			content="Générateur de planning de garde pour médecins généralistes : équité, jours fériés français, export Excel."
+		/>
+		<meta property="og:image" content="https://planning-garde.netlify.app/og-image.png" />
+		<meta property="og:image:type" content="image/png" />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta
+			property="og:image:alt"
+			content="Planning de garde — calendrier et répartition équitable par RecoMédicales"
+		/>
+
+		<!-- Twitter -->
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:site" content="@recomedicales" />
+		<meta name="twitter:creator" content="@recomedicales" />
+		<meta name="twitter:title" content="Générateur de planning de garde — RecoMédicales" />
+		<meta
+			name="twitter:description"
+			content="Générateur de planning de garde pour médecins généralistes : équité, jours fériés français, export Excel."
+		/>
+		<meta name="twitter:image" content="https://planning-garde.netlify.app/og-image.png" />
+		<meta
+			name="twitter:image:alt"
+			content="Planning de garde — calendrier et répartition équitable par RecoMédicales"
+		/>
+
+		<!-- Structured data -->
+		<script type="application/ld+json">
+			{
+				"@context": "https://schema.org",
+				"@graph": [
+					{
+						"@type": "Organization",
+						"@id": "https://planning-garde.netlify.app/#organization",
+						"name": "RecoMédicales",
+						"url": "https://www.recomedicales.fr/",
+						"logo": {
+							"@type": "ImageObject",
+							"url": "https://planning-garde.netlify.app/og-image.png",
+							"width": 1200,
+							"height": 630
+						}
+					},
+					{
+						"@type": "WebSite",
+						"@id": "https://planning-garde.netlify.app/#website",
+						"url": "https://planning-garde.netlify.app/",
+						"name": "Générateur de planning de garde",
+						"inLanguage": "fr-FR",
+						"publisher": {
+							"@id": "https://planning-garde.netlify.app/#organization"
+						}
+					},
+					{
+						"@type": "WebApplication",
+						"@id": "https://planning-garde.netlify.app/#webapp",
+						"name": "Générateur de planning de garde — RecoMédicales",
+						"description": "Générateur de planning de garde pour médecins généralistes : équité, jours fériés français, export Excel.",
+						"url": "https://planning-garde.netlify.app/",
+						"applicationCategory": "HealthApplication",
+						"operatingSystem": "Any",
+						"browserRequirements": "Nécessite JavaScript et un navigateur web moderne.",
+						"isAccessibleForFree": true,
+						"inLanguage": "fr-FR",
+						"offers": {
+							"@type": "Offer",
+							"price": "0",
+							"priceCurrency": "EUR"
+						},
+						"featureList": [
+							"Répartition équitable des gardes entre médecins",
+							"Jours fériés français, option Alsace-Moselle",
+							"Gestion des absences et des jours indisponibles",
+							"Échanges et verrouillage des gardes",
+							"Export Excel de chaque vue",
+							"Données stockées localement dans le navigateur"
+						],
+						"image": "https://planning-garde.netlify.app/og-image.png",
+						"publisher": {
+							"@id": "https://planning-garde.netlify.app/#organization"
+						}
+					}
+				]
+			}
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

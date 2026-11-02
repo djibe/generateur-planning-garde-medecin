@@ -6,6 +6,7 @@
 	import '../app.scss';
 
 	import { onMount } from 'svelte';
+	import AppFooter from '#lib/components/AppFooter.svelte';
 	import ToastHost from '#lib/components/ToastHost.svelte';
 	import { app } from '#lib/stores/app.svelte.js';
 
@@ -42,3 +43,4 @@
 
 <ToastHost />
 {@render children()}
+<AppFooter />

@@ -176,6 +176,23 @@ h6,
 	padding: 1.35rem 1rem 4rem;
 }
 
+.app-footer {
+	max-width: 1440px;
+	margin: 0 auto;
+	padding: 0 1rem 2rem;
+	color: var(--bs-secondary-color);
+}
+
+.app-footer a {
+	color: inherit;
+	text-decoration: underline;
+	text-underline-offset: 0.15em;
+}
+
+.app-footer a:hover {
+	color: var(--bs-primary);
+}
+
 .tabbar {
 	display: flex;
 	gap: 0.25rem;
