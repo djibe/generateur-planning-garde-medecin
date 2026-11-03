@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildSlots, groupBySemester, semestersOf, slotLabel } from '#lib/domain/calendar.js';
-import { eachDay } from '#lib/utils/date.js';
+import { holidaysForYear } from '#lib/domain/holidays.js';
+import { eachDay, weekdayIndex } from '#lib/utils/date.js';
 
 describe('semestersOf', () => {
 	it('splits the year into two balanced semesters', () => {
@@ -109,6 +110,39 @@ describe('buildSlots', () => {
 		expect(stephen?.isWeekendBlock).toBe(true);
 		expect(stephen?.type).toBe('holiday');
 		expect(stephen?.holidayName).toBe('Saint-Étienne');
+	});
+
+	for (const mode of ['split', 'combined'] as const) {
+		it(`only covers weekends and holidays (${mode})`, () => {
+			const slots = buildSlots(2026, mode, { weekendsAndHolidaysOnly: true });
+			const holidays = new Set(holidaysForYear(2026).map((holiday) => holiday.date));
+			const dates = slots.flatMap((slot) => slot.dates);
+
+			// 104 weekend days + 11 holidays − 2 holidays falling on a weekend.
+			expect(dates).toHaveLength(113);
+			expect(new Set(dates).size).toBe(dates.length);
+			for (const date of dates) {
+				expect(weekdayIndex(date) >= 5 || holidays.has(date)).toBe(true);
+			}
+			expect(slots.some((slot) => slot.type === 'weekday' || slot.type === 'friday')).toBe(false);
+		});
+	}
+
+	it('keeps combined weekend blocks and holiday slots only', () => {
+		const slots = buildSlots(2026, 'combined', { weekendsAndHolidaysOnly: true });
+		const byDate = new Map(
+			slots.flatMap((slot) => slot.dates.map((date) => [date, slot] as const))
+		);
+		expect(byDate.get('2026-01-03')?.dates).toEqual(['2026-01-03', '2026-01-04']);
+		expect(byDate.get('2026-01-01')?.type).toBe('holiday');
+		expect(byDate.has('2026-01-02')).toBe(false);
+	});
+
+	it('excludes holiday eves from the reduced coverage', () => {
+		const slots = buildSlots(2026, 'split', { weekendsAndHolidaysOnly: true });
+		const dates = new Set(slots.flatMap((slot) => slot.dates));
+		expect(dates.has('2026-12-24')).toBe(false);
+		expect(dates.has('2026-12-31')).toBe(false);
 	});
 
 	it('groups slots by semester', () => {

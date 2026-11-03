@@ -75,7 +75,8 @@ class AppStore {
 	slots = $derived.by(() =>
 		this.active
 			? buildSlots(this.active.year, this.active.settings.weekendMode, {
-					alsaceMoselle: this.active.settings.alsaceMoselle
+					alsaceMoselle: this.active.settings.alsaceMoselle,
+					weekendsAndHolidaysOnly: this.active.settings.weekendsAndHolidaysOnly
 				})
 			: []
 	);
@@ -205,6 +206,7 @@ class AppStore {
 		area: string;
 		year: number;
 		alsaceMoselle?: boolean;
+		weekendsAndHolidaysOnly?: boolean;
 	}): void {
 		this.flushSave();
 		const profile = createEmptyProfile(input);
@@ -316,6 +318,23 @@ class AppStore {
 			enabled
 				? 'Alsace-Moselle activé : Vendredi saint et Saint-Étienne ajoutés. Régénérez le planning pour rééquilibrer.'
 				: 'Alsace-Moselle désactivé : retour aux 11 jours fériés métropolitains. Régénérez le planning pour rééquilibrer.'
+		);
+	}
+
+	/**
+	 * Coverage changes which slots exist. Existing assignments are left untouched:
+	 * they are ignored while the option is on and replaced by the next generation,
+	 * so toggling back restores the previous planning.
+	 */
+	setWeekendsAndHolidaysOnly(enabled: boolean): void {
+		const profile = this.active;
+		if (!profile || profile.settings.weekendsAndHolidaysOnly === enabled) return;
+		profile.settings.weekendsAndHolidaysOnly = enabled;
+		this.notify(
+			'info',
+			enabled
+				? 'Couverture réduite aux week-ends et jours fériés : régénérez le planning pour rééquilibrer.'
+				: 'Tous les jours sont à nouveau couverts : régénérez le planning pour rééquilibrer.'
 		);
 	}
 

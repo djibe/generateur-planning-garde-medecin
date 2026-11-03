@@ -10,12 +10,19 @@
 	let area = $state('');
 	let year = $state(currentYear);
 	let alsaceMoselle = $state(false);
+	let weekendsAndHolidaysOnly = $state(false);
 
 	const suggested = $derived(`${area.trim() || 'Mon secteur'} — ${year}`);
 
 	function submit(event: SubmitEvent) {
 		event.preventDefault();
-		app.createProfile({ name: name.trim() || suggested, area, year, alsaceMoselle });
+		app.createProfile({
+			name: name.trim() || suggested,
+			area,
+			year,
+			alsaceMoselle,
+			weekendsAndHolidaysOnly
+		});
 		onclose();
 	}
 </script>
@@ -56,6 +63,23 @@
 			<div class="form-text">
 				Ajoute le Vendredi saint et la Saint-Étienne (26 décembre) aux 11 jours fériés
 				métropolitains.
+			</div>
+		</div>
+		<div>
+			<div class="form-check">
+				<input
+					id="np-weekends-holidays"
+					class="form-check-input"
+					type="checkbox"
+					bind:checked={weekendsAndHolidaysOnly}
+				/>
+				<label class="form-check-label" for="np-weekends-holidays"
+					>Week-ends et jours fériés uniquement</label
+				>
+			</div>
+			<div class="form-text">
+				Ne couvre que les samedis, dimanches et jours fériés. Les veilles de férié et les jours de
+				semaine restent sans garde.
 			</div>
 		</div>
 		<div class="d-flex justify-content-end gap-2 pt-1">

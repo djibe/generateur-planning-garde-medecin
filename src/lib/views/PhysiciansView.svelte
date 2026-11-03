@@ -241,7 +241,7 @@
 					</div>
 				</div>
 			</div>
-			<div class="mt-3">
+			<div class="mt-3 d-flex flex-wrap gap-4">
 				<div class="form-check">
 					<input
 						id="profile-alsace"
@@ -252,6 +252,23 @@
 					/>
 					<label class="form-check-label" for="profile-alsace">Alsace-Moselle</label>
 				</div>
+				<div class="form-check">
+					<input
+						id="profile-weekends-holidays"
+						class="form-check-input"
+						type="checkbox"
+						checked={profile.settings.weekendsAndHolidaysOnly}
+						onchange={(event) => app.setWeekendsAndHolidaysOnly(event.currentTarget.checked)}
+					/>
+					<label class="form-check-label" for="profile-weekends-holidays"
+						>Week-ends et jours fériés uniquement</label
+					>
+				</div>
+			</div>
+			<div class="form-text mt-1">
+				{profile.settings.weekendsAndHolidaysOnly
+					? 'Seuls les samedis, dimanches et jours fériés sont couverts par les gardes.'
+					: 'Tous les jours de l’année sont couverts par les gardes.'}
 			</div>
 		</div>
 	</section>
@@ -330,15 +347,17 @@
 								<th style="width: 4.5rem">#</th>
 								<th>Nom</th>
 								<th>Téléphone</th>
-								{#each WEEKDAYS as day (day)}
-									<th
-										style="width: 5.4rem"
-										class="text-center"
-										title={`Indisponibilité ou préférence du ${WEEKDAY_LABELS[day].toLowerCase()}`}
-									>
-										{WEEKDAY_LABELS[day].slice(0, 3)}
-									</th>
-								{/each}
+								{#if !profile.settings.weekendsAndHolidaysOnly}
+									{#each WEEKDAYS as day (day)}
+										<th
+											style="width: 5.4rem"
+											class="text-center"
+											title={`Indisponibilité ou préférence du ${WEEKDAY_LABELS[day].toLowerCase()}`}
+										>
+											{WEEKDAY_LABELS[day].slice(0, 3)}
+										</th>
+									{/each}
+								{/if}
 								<th style="width: 9rem" title="Premier jour d’absence">Exempté du</th>
 								<th style="width: 9rem" title="Dernier jour d’absence">au</th>
 								<th style="width: 7.5rem" class="text-end">Actions</th>
@@ -381,7 +400,7 @@
 											aria-label="Nom du médecin"
 											oninput={(event) => (physician.name = event.currentTarget.value)}
 										/>
-										{#if (physician.unavailableWeekdays?.length ?? 0) > MAX_UNAVAILABLE_WEEKDAYS}
+										{#if !profile.settings.weekendsAndHolidaysOnly && (physician.unavailableWeekdays?.length ?? 0) > MAX_UNAVAILABLE_WEEKDAYS}
 											<i
 												class="bi bi-exclamation-triangle-fill text-warning ms-1"
 												title="Maximum 4 jours indisponibles : rendez au moins un jour disponible."
@@ -405,22 +424,24 @@
 											oninput={(event) => (physician.phone = event.currentTarget.value)}
 										/>
 									</td>
-									{#each WEEKDAYS as day (day)}
-										<td class="text-center">
-											<select
-												class="form-select form-select-sm weekday-select"
-												value={weekdayValue(physician, day)}
-												aria-label={`${WEEKDAY_LABELS[day]} — ${physician.name || 'sans nom'}`}
-												onchange={(event) => onWeekdayChange(physician, day, event)}
-											>
-												<option value="">—</option>
-												<option value="off">Indispo</option>
-												{#each WEEKDAY_RANKS as rank (rank)}
-													<option value={String(rank)}>{rank}</option>
-												{/each}
-											</select>
-										</td>
-									{/each}
+									{#if !profile.settings.weekendsAndHolidaysOnly}
+										{#each WEEKDAYS as day (day)}
+											<td class="text-center">
+												<select
+													class="form-select form-select-sm weekday-select"
+													value={weekdayValue(physician, day)}
+													aria-label={`${WEEKDAY_LABELS[day]} — ${physician.name || 'sans nom'}`}
+													onchange={(event) => onWeekdayChange(physician, day, event)}
+												>
+													<option value="">—</option>
+													<option value="off">Indispo</option>
+													{#each WEEKDAY_RANKS as rank (rank)}
+														<option value={String(rank)}>{rank}</option>
+													{/each}
+												</select>
+											</td>
+										{/each}
+									{/if}
 									<td>
 										<input
 											type="date"
@@ -469,10 +490,16 @@
 					</table>
 				</div>
 				<div class="app-card-foot small text-secondary">
-					Chaque jour : <strong>—</strong> disponible sans préférence, <strong>Indispo</strong>
-					jamais ce jour (maximum 4 jours), <strong>1</strong> jour préféré … <strong>5</strong>
-					moins préféré. <strong>Exempté du / au</strong> : période d’absence unique, vide si le médecin
-					est disponible toute l’année.
+					{#if profile.settings.weekendsAndHolidaysOnly}
+						Les colonnes d’indisponibilité et de préférence de semaine sont masquées : seuls les
+						week-ends et les jours fériés sont couverts. <strong>Exempté du / au</strong> : période d’absence
+						unique, vide si le médecin est disponible toute l’année.
+					{:else}
+						Chaque jour : <strong>—</strong> disponible sans préférence, <strong>Indispo</strong>
+						jamais ce jour (maximum 4 jours), <strong>1</strong> jour préféré … <strong>5</strong>
+						moins préféré. <strong>Exempté du / au</strong> : période d’absence unique, vide si le médecin
+						est disponible toute l’année.
+					{/if}
 				</div>
 			{/if}
 		</div>

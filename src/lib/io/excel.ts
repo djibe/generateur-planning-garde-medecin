@@ -136,6 +136,12 @@ export async function exportPhysiciansWorkbook(profile: Profile, slots: Slot[]):
 					? '1 garde (samedi + dimanche)'
 					: '2 gardes séparées'
 		},
+		{
+			label: 'Couverture',
+			value: profile.settings.weekendsAndHolidaysOnly
+				? 'Week-ends et jours fériés uniquement'
+				: 'Tous les jours'
+		},
 		{ label: 'Semestre 1', value: `01/01/${profile.year} – 30/06/${profile.year}` },
 		{ label: 'Semestre 2', value: `01/07/${profile.year} – 31/12/${profile.year}` },
 		{ label: 'Médecins', value: physicians.length },
@@ -192,8 +198,12 @@ export async function exportPhysiciansWorkbook(profile: Profile, slots: Slot[]):
 				{ header: 'Absence du', key: 'absenceFrom', width: 14 },
 				{ header: 'Absence au', key: 'absenceTo', width: 14 },
 				{ header: 'Absence (j)', key: 'absenceDays', width: 12 },
-				{ header: 'Jours indisponibles', key: 'weekdays', width: 24 },
-				{ header: 'Jours préférés', key: 'preferences', width: 28 }
+				...(!profile.settings.weekendsAndHolidaysOnly
+					? [
+							{ header: 'Jours indisponibles', key: 'weekdays', width: 24 },
+							{ header: 'Jours préférés', key: 'preferences', width: 28 }
+						]
+					: [])
 			],
 			rows: physicians.map((physician) => ({
 				name: physician.name || 'Sans nom',
@@ -201,8 +211,12 @@ export async function exportPhysiciansWorkbook(profile: Profile, slots: Slot[]):
 				absenceFrom: physician.absenceFrom ? formatMedium(physician.absenceFrom) : '',
 				absenceTo: physician.absenceTo ? formatMedium(physician.absenceTo) : '',
 				absenceDays: absenceDaysInYear(physician, profile.year),
-				weekdays: formatUnavailableWeekdays(physician) || '—',
-				preferences: formatWeekdayPreferences(physician) || '—'
+				...(!profile.settings.weekendsAndHolidaysOnly
+					? {
+							weekdays: formatUnavailableWeekdays(physician) || '—',
+							preferences: formatWeekdayPreferences(physician) || '—'
+						}
+					: {})
 			}))
 		},
 		quotaSheet('S1'),

@@ -31,11 +31,26 @@ export function primaryType(date: ISODate, holidays: Map<string, string>): Categ
 	return 'weekday';
 }
 
-export function buildSlots(year: number, mode: WeekendMode, options: HolidayOptions = {}): Slot[] {
+export interface SlotBuildOptions extends HolidayOptions {
+	/** Only weekends and public holidays are covered. Holiday eves stay uncovered. */
+	weekendsAndHolidaysOnly?: boolean;
+}
+
+export function buildSlots(
+	year: number,
+	mode: WeekendMode,
+	options: SlotBuildOptions = {}
+): Slot[] {
 	const holidays = holidayMap(year, options);
 	const slots: Slot[] = [];
 	const end = yearEnd(year);
 	let cursor = yearStart(year);
+
+	const isCovered = (date: ISODate): boolean => {
+		if (!options.weekendsAndHolidaysOnly) return true;
+		const index = weekdayIndex(date);
+		return index === 5 || index === 6 || holidays.has(date);
+	};
 
 	while (cursor <= end) {
 		if (mode === 'combined' && weekdayIndex(cursor) === 5) {
@@ -46,7 +61,7 @@ export function buildSlots(year: number, mode: WeekendMode, options: HolidayOpti
 				continue;
 			}
 		}
-		slots.push(makeSlot([cursor], holidays, year));
+		if (isCovered(cursor)) slots.push(makeSlot([cursor], holidays, year));
 		cursor = addDays(cursor, 1);
 	}
 

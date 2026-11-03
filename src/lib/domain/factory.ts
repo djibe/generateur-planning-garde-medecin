@@ -35,6 +35,7 @@ export function createEmptyProfile(input: {
 	area: string;
 	year: number;
 	alsaceMoselle?: boolean;
+	weekendsAndHolidaysOnly?: boolean;
 	physicians?: Physician[];
 }): Profile {
 	const now = new Date().toISOString();
@@ -46,7 +47,11 @@ export function createEmptyProfile(input: {
 		name: input.name.trim() || `Planning ${area || 'garde'} ${year}`.trim(),
 		area,
 		year,
-		settings: { weekendMode: 'combined', alsaceMoselle: input.alsaceMoselle ?? false },
+		settings: {
+			weekendMode: 'combined',
+			alsaceMoselle: input.alsaceMoselle ?? false,
+			weekendsAndHolidaysOnly: input.weekendsAndHolidaysOnly ?? false
+		},
 		physicians: input.physicians ?? [],
 		assignments: { S1: {}, S2: {} },
 		pins: {},
@@ -78,6 +83,7 @@ export function inputSignature(profile: Profile): string {
 		mode: profile.settings.weekendMode,
 		// Omitted when false so profiles generated before the option existed stay up to date.
 		...(profile.settings.alsaceMoselle ? { alsaceMoselle: true } : {}),
+		...(profile.settings.weekendsAndHolidaysOnly ? { weekendsAndHolidaysOnly: true } : {}),
 		physicians: [...profile.physicians]
 			.sort((a, b) => a.sortOrder - b.sortOrder)
 			.map((physician) => ({

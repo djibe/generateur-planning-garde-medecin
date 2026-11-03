@@ -56,6 +56,8 @@ export interface ProfileSettings {
 	weekendMode: WeekendMode;
 	/** Also observes Good Friday and Saint Stephen's Day (26 December). */
 	alsaceMoselle: boolean;
+	/** Only weekends and public holidays are covered by guards. */
+	weekendsAndHolidaysOnly: boolean;
 }
 
 export interface Profile {

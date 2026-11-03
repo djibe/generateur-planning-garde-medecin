@@ -16,10 +16,14 @@ aucune donnée envoyée sur Internet.
 - Nom du profil et du secteur, année.
 - Option **Alsace-Moselle** à la création du profil (et modifiable dans les paramètres) : ajoute le
   Vendredi saint et la Saint-Étienne (26 décembre) aux jours fériés.
+- Option **Week-ends et jours fériés uniquement** (création du profil et paramètres) : seuls les
+  samedis, dimanches et jours fériés sont couverts. Les veilles de férié et les jours de semaine ne
+  reçoivent aucune garde.
 - Liste des médecins : nom, téléphone, ordre, plage d'absence unique (du / au).
 - Une colonne par jour (lundi–vendredi) combinant indisponibilité (max 4 jours) et préférence
   de garde (1 = jour préféré … 5 = moins préféré). Les jours fériés restent disponibles et les
-  week-ends ne sont pas concernés.
+  week-ends ne sont pas concernés. Ces colonnes sont masquées quand l'option « Week-ends et jours
+  fériés uniquement » est active.
 - Le générateur applique un ordre de priorité strict : **équilibre du nombre total de jours**,
   puis **équilibre par catégorie**, puis **espacement**, puis **jours préférés**.
 - Import CSV (`Nom;Téléphone;Absence du;Absence au;Jours indisponibles;Jours préférés`),
@@ -65,21 +69,22 @@ aucune donnée envoyée sur Internet.
 
 ## Règles de génération
 
-| Règle                             | Détail                                                                                                     |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Semestres                         | 01/01 → 30/06 (S1) et 01/07 → 31/12 (S2)                                                                   |
-| Jours fériés                      | 11 fériés métropolitains, ou 13 avec l'option Alsace-Moselle (Vendredi saint + Saint-Étienne)              |
-| Week-ends                         | Mode global par profil : **1 garde** (samedi + dimanche) ou **2 gardes** séparées                          |
-| Attribution                       | 1 praticien par garde ; tous les jours de l'année sont couverts                                            |
-| Équité                            | Priorité absolue : nombre total de jours identique (au prorata des absences), puis équilibre par catégorie |
-| Objectifs                         | Calculés automatiquement ; les jours des médecins indisponibles un jour donné sont compensés ailleurs      |
-| Espacement                        | Objectif secondaire : pénalise les gardes à moins de 14 jours, évite deux week-ends consécutifs            |
-| Préférences                       | Objectif tertiaire : départage les solutions déjà équilibrées et espacées                                  |
-| Absences                          | Une plage « du / au » par médecin ; un médecin absent toute l'année est exclu de la génération             |
-| Prorata des absences              | Les jours dus sont réduits au prorata de la durée d'absence sur l'année                                    |
-| Veille de férié                   | Un jour qui précède un férié est compté dans la catégorie « veille de férié »                              |
-| Férié un vendredi/samedi/dimanche | Compté dans sa catégorie principale « férié » ; un férié en week-end compte aussi un jour de week-end      |
-| Verrouillage                      | Une garde verrouillée est réattribuée au même médecin lors de la régénération                              |
+| Règle                             | Détail                                                                                                           |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Semestres                         | 01/01 → 30/06 (S1) et 01/07 → 31/12 (S2)                                                                         |
+| Jours fériés                      | 11 fériés métropolitains, ou 13 avec l'option Alsace-Moselle (Vendredi saint + Saint-Étienne)                    |
+| Week-ends                         | Mode global par profil : **1 garde** (samedi + dimanche) ou **2 gardes** séparées                                |
+| Couverture                        | Tous les jours par défaut, ou **week-ends et jours fériés uniquement** (les veilles de férié restent sans garde) |
+| Attribution                       | 1 praticien par garde ; tous les jours de l'année par défaut, ou seulement les jours couverts avec l'option      |
+| Équité                            | Priorité absolue : nombre total de jours identique (au prorata des absences), puis équilibre par catégorie       |
+| Objectifs                         | Calculés automatiquement ; les jours des médecins indisponibles un jour donné sont compensés ailleurs            |
+| Espacement                        | Objectif secondaire : pénalise les gardes à moins de 14 jours, évite deux week-ends consécutifs                  |
+| Préférences                       | Objectif tertiaire : départage les solutions déjà équilibrées et espacées                                        |
+| Absences                          | Une plage « du / au » par médecin ; un médecin absent toute l'année est exclu de la génération                   |
+| Prorata des absences              | Les jours dus sont réduits au prorata de la durée d'absence sur l'année                                          |
+| Veille de férié                   | Un jour qui précède un férié est compté dans la catégorie « veille de férié »                                    |
+| Férié un vendredi/samedi/dimanche | Compté dans sa catégorie principale « férié » ; un férié en week-end compte aussi un jour de week-end            |
+| Verrouillage                      | Une garde verrouillée est réattribuée au même médecin lors de la régénération                                    |
 
 Le générateur combine un remplissage glouton (priorité aux week-ends et fériés), une
 recherche locale recuite (recuit simulé) déterministe pour une graine donnée, puis des passes

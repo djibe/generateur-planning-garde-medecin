@@ -32,7 +32,8 @@ const profileSchema = z.object({
 	year: z.number().int().min(2000).max(2200),
 	settings: z.object({
 		weekendMode: z.enum(['combined', 'split']),
-		alsaceMoselle: z.boolean().default(false)
+		alsaceMoselle: z.boolean().default(false),
+		weekendsAndHolidaysOnly: z.boolean().default(false)
 	}),
 	physicians: z.array(physicianSchema).default([]),
 	assignments: z

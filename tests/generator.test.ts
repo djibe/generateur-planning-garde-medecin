@@ -18,7 +18,7 @@ function makeProfile(count = 12, mode: WeekendMode = 'combined'): Profile {
 		name: 'Test',
 		area: 'Test',
 		year: 2026,
-		settings: { weekendMode: mode, alsaceMoselle: false },
+		settings: { weekendMode: mode, alsaceMoselle: false, weekendsAndHolidaysOnly: false },
 		physicians,
 		assignments: { S1: {}, S2: {} },
 		pins: {},
@@ -53,6 +53,21 @@ describe('generateSchedule', () => {
 		});
 		expect(result.unassigned).toEqual([]);
 		expect(Object.keys(result.assignments)).toHaveLength(slots.length);
+	});
+
+	it('fills every slot when only weekends and holidays are covered', () => {
+		const profile = makeProfile();
+		const slots = buildSlots(2026, 'combined', { weekendsAndHolidaysOnly: true });
+		const result = generateSchedule({
+			year: 2026,
+			physicians: profile.physicians,
+			slots,
+			pins: {},
+			seed: 42
+		});
+		expect(result.unassigned).toEqual([]);
+		expect(Object.keys(result.assignments)).toHaveLength(slots.length);
+		expect(slots.every((slot) => slot.type !== 'weekday')).toBe(true);
 	});
 
 	it('is deterministic for a given seed', () => {

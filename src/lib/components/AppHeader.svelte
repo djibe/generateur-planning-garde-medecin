@@ -155,6 +155,9 @@
 				{#if app.active.settings.alsaceMoselle}
 					<span><i class="bi bi-pin-map"></i>Alsace-Moselle</span>
 				{/if}
+				{#if app.active.settings.weekendsAndHolidaysOnly}
+					<span><i class="bi bi-calendar-check"></i>Week-ends et fériés uniquement</span>
+				{/if}
 				{#if app.generated}
 					<span
 						><i class="bi bi-clock-history"></i>Généré le {formatDateTime(
